@@ -570,6 +570,89 @@ void sel_shrink(LONG r)
     sel_update_bounds();
 }
 
+/* Select > Modify > Border: Band der Breite w um die Auswahlkante (je halb innen und aussen),
+ * weich auslaufend wie in Photoshop */
+void sel_border(LONG wd)
+{
+    LONG x0, y0, w, h, x, y, half = (wd + 1) / 2;
+    UWORD *din, *dout;
+    UBYTE *band;
+    if (!doc->hassel || wd < 1)
+        return;
+    x0 = doc->selx0 - half - 2; y0 = doc->sely0 - half - 2;
+    w = doc->selx1 + half + 2 - x0; h = doc->sely1 + half + 2 - y0;
+    din = chamfer(x0, y0, w, h, FALSE);     /* innen: Abstand zur Kante */
+    dout = chamfer(x0, y0, w, h, TRUE);     /* aussen: Abstand zur Auswahl */
+    band = AllocVec(w * h, MEMF_ANY);
+    if (din && dout && band) {
+        for (y = 0; y < h; y++)
+            for (x = 0; x < w; x++) {
+                LONG i = y * w + x, gx = x0 + x, gy = y0 + y;
+                BOOL in = gx >= 0 && gy >= 0 && gx < doc->w && gy < doc->h &&
+                          doc->sel[gy * doc->w + gx] >= 128;
+                LONG d = in ? din[i] : dout[i];     /* 3 = ein Pixel */
+                band[i] = d <= 3 * half ? 255 : 0;
+            }
+        for (y = 0; y < h; y++)
+            for (x = 0; x < w; x++) {
+                LONG gx = x0 + x, gy = y0 + y;
+                if (gx >= 0 && gy >= 0 && gx < doc->w && gy < doc->h)
+                    doc->sel[gy * doc->w + gx] = band[y * w + x];
+            }
+        /* weiche Kanten */
+        {
+            LONG bx0 = x0 < 0 ? 0 : x0, by0 = y0 < 0 ? 0 : y0;
+            LONG bx1 = x0 + w > doc->w ? doc->w : x0 + w, by1 = y0 + h > doc->h ? doc->h : y0 + h;
+            mask_blur(doc->sel, doc->w, bx0, by0, bx1, by1, 1);
+        }
+    }
+    if (din) FreeVec(din);
+    if (dout) FreeVec(dout);
+    if (band) FreeVec(band);
+    sel_update_bounds();
+}
+
+/* Select > Modify > Smooth: Mehrheit im (2r+1)^2-Fenster entscheidet (Zacken, Inseln weg) */
+void sel_smooth(LONG r)
+{
+    LONG x0, y0, x1, y1, w, h, x, y;
+    ULONG *sum;
+    if (!doc->hassel || r < 1)
+        return;
+    x0 = doc->selx0 - r; y0 = doc->sely0 - r;
+    x1 = doc->selx1 + r; y1 = doc->sely1 + r;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > doc->w) x1 = doc->w;
+    if (y1 > doc->h) y1 = doc->h;
+    w = x1 - x0;
+    h = y1 - y0;
+    /* Summentabelle (w+1)*(h+1) der gesetzten Pixel */
+    if (!(sum = AllocVec((w + 1) * (h + 1) * sizeof(ULONG), MEMF_ANY | MEMF_CLEAR)))
+        return;
+    for (y = 0; y < h; y++) {
+        ULONG row = 0;
+        const UBYTE *s = doc->sel + (y0 + y) * doc->w + x0;
+        for (x = 0; x < w; x++) {
+            row += s[x] >= 128;
+            sum[(y + 1) * (w + 1) + x + 1] = sum[y * (w + 1) + x + 1] + row;
+        }
+    }
+    for (y = 0; y < h; y++) {
+        UBYTE *s = doc->sel + (y0 + y) * doc->w + x0;
+        LONG ya = y - r < 0 ? 0 : y - r, yb = y + r + 1 > h ? h : y + r + 1;
+        for (x = 0; x < w; x++) {
+            LONG xa = x - r < 0 ? 0 : x - r, xb = x + r + 1 > w ? w : x + r + 1;
+            /* Fenster am Bildrand wird nicht verkleinert gewertet: ausserhalb zaehlt als leer */
+            ULONG n = sum[yb * (w + 1) + xb] - sum[ya * (w + 1) + xb] - sum[yb * (w + 1) + xa] + sum[ya * (w + 1) + xa];
+            ULONG area = (2 * r + 1) * (2 * r + 1);
+            s[x] = 2 * n > area ? 255 : 0;
+        }
+    }
+    FreeVec(sum);
+    sel_update_bounds();
+}
+
 /* ---- Schnellauswahl: mit dem Pinsel ueber das Objekt malen ---- */
 
 static BOOL qs_sub;

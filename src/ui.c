@@ -121,7 +121,8 @@ static const MenuItem m_layer[] = {
     { "Flatten Image", "", CMD_FLATTEN }, END };
 static const MenuItem m_modify[] = {
     { "Feather...", "Shift+F6", CMD_FEATHER },
-    { "Expand...", "", CMD_GROW }, { "Contract...", "", CMD_SHRINK }, END };
+    { "Expand...", "", CMD_GROW }, { "Contract...", "", CMD_SHRINK },
+    { "Border...", "", CMD_BORDER }, { "Smooth...", "", CMD_SMOOTH }, END };
 static const MenuItem m_select[] = {
     { "All", "Ctrl+A", CMD_SEL_ALL }, { "Deselect", "Ctrl+D", CMD_SEL_NONE },
     { "Reselect", "Shift+Ctrl+D", CMD_RESELECT },
@@ -2729,6 +2730,7 @@ static BOOL cmd_enabled(LONG c)
     case CMD_REDO:
         return (doc->ucur ? doc->ucur->next : doc->uhead) != NULL || doc->size_next != NULL;
     case CMD_SEL_NONE: case CMD_SEL_INVERT: case CMD_FEATHER: case CMD_GROW: case CMD_SHRINK:
+    case CMD_BORDER: case CMD_SMOOTH:
     case CMD_CROP: case CMD_FILL_FG: case CMD_FILL_BG: case CMD_ERASE: case CMD_MASK_REVEAL_SEL:
     case CMD_LAYER_VIA_CUT: case CMD_GEN_FILL: case CMD_GEN_REMOVE:
         return doc->hassel;

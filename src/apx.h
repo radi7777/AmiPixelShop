@@ -417,6 +417,8 @@ void sel_wand(LONG x, LONG y, LONG tol, BOOL contiguous, BOOL antialias, LONG mo
 void sel_feather(LONG radius);
 void sel_grow(LONG radius);
 void sel_shrink(LONG radius);
+void sel_border(LONG width);
+void sel_smooth(LONG radius);
 
 /* ---- Text (text.c) ---- */
 extern LONG text_size, text_font;
@@ -667,7 +669,7 @@ void clip_free(void);
 enum {
     CMD_NONE, CMD_NEW, CMD_OPEN, CMD_SAVE, CMD_SAVEAS, CMD_QUIT,
     CMD_UNDO, CMD_REDO, CMD_FILL_FG, CMD_FILL_BG, CMD_ERASE,
-    CMD_SEL_ALL, CMD_SEL_NONE, CMD_SEL_INVERT, CMD_FEATHER, CMD_GROW, CMD_SHRINK,
+    CMD_SEL_ALL, CMD_SEL_NONE, CMD_SEL_INVERT, CMD_FEATHER, CMD_GROW, CMD_SHRINK, CMD_BORDER, CMD_SMOOTH,
     CMD_LAYER_NEW, CMD_LAYER_DEL, CMD_FLATTEN,
     CMD_LAYER_DUP, CMD_LAYER_UP, CMD_LAYER_DOWN, CMD_MERGE_DOWN, CMD_LAYER_RENAME,
     CMD_CLOSE, CMD_NEXT_DOC, CMD_CUT, CMD_COPY, CMD_COPY_MERGED, CMD_PASTE, CMD_NEW_FROM_CLIP,

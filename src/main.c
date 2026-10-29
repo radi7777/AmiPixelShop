@@ -1992,16 +1992,21 @@ void do_command(LONG c)
         break;
     case CMD_FEATHER:
     case CMD_GROW:
-    case CMD_SHRINK: {
-        static LONG r_feather = 5, r_grow = 5, r_shrink = 5;
-        DlgSlider d = { "Radius:", NULL, 1, 100, "px", 1 };
-        const char *title = c == CMD_FEATHER ? "Feather Selection" :
-                            c == CMD_GROW ? "Expand Selection" : "Contract Selection";
+    case CMD_SHRINK:
+    case CMD_BORDER:
+    case CMD_SMOOTH: {
+        static LONG r_feather = 5, r_grow = 5, r_shrink = 5, r_border = 10, r_smooth = 2;
+        DlgSlider d = { c == CMD_BORDER ? "Width:" : c == CMD_SMOOTH ? "Sample Radius:" : "Radius:",
+                        NULL, 1, 100, "px", 1 };
+        const char *title = c == CMD_FEATHER ? "Feather Selection" : c == CMD_GROW ? "Expand Selection" :
+                            c == CMD_SHRINK ? "Contract Selection" : c == CMD_BORDER ? "Border Selection" :
+                            "Smooth Selection";
         if (!doc->hassel) {
             status_message("No selection");
             break;
         }
-        d.val = c == CMD_FEATHER ? &r_feather : c == CMD_GROW ? &r_grow : &r_shrink;
+        d.val = c == CMD_FEATHER ? &r_feather : c == CMD_GROW ? &r_grow : c == CMD_SHRINK ? &r_shrink :
+                c == CMD_BORDER ? &r_border : &r_smooth;
         if (!dialog_run(title, &d, 1, NULL))
             break;
         busy(TRUE);
@@ -2009,8 +2014,12 @@ void do_command(LONG c)
             sel_feather(*d.val);
         else if (c == CMD_GROW)
             sel_grow(*d.val);
-        else
+        else if (c == CMD_SHRINK)
             sel_shrink(*d.val);
+        else if (c == CMD_BORDER)
+            sel_border(*d.val);
+        else
+            sel_smooth(*d.val);
         busy(FALSE);
         selection_changed();
         break; }
