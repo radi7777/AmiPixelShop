@@ -69,7 +69,9 @@ typedef struct AdjInfo {
     LONG cmd;
     LONG v[6];
     Curve curves[4];
+    LONG lv[3][5];              /* Levels je Kanal R, G, B (wie v[0..4]); Gamma 0 = neutral */
 } AdjInfo;
+#define ADJINFO_V1 ((LONG)(sizeof(LONG) * 7 + sizeof(Curve) * 4))   /* Groesse bis 0.6 (ohne lv) */
 
 /* Ebenenarten */
 enum { LK_PIXEL, LK_GROUP, LK_ADJUST };
@@ -710,7 +712,8 @@ BOOL curves_dialog(void (*preview)(void));
 /* Histogramm (0 = RGB, 1..3 = R, G, B) und Levels-Dialog; v = Input Black, Gamma*100,
  * Input White, Output Black, Output White */
 extern ULONG hist[4][256];
-BOOL levels_dialog(LONG *v, void (*preview)(void));
+BOOL levels_dialog(LONG *v, LONG (*ch)[5], void (*preview)(void));
+extern LONG levels_ch[3][5];    /* Kanalwerte fuer Image > Adjustments > Levels */
 const char *filter_last_name(void);
 
 /* ---- main.c ---- */

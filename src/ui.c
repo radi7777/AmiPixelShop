@@ -4403,7 +4403,10 @@ static void hist_draw(const ULONG *h, LONG x0, LONG y0, LONG w, LONG ht, ULONG c
 
 #define LV_HH 128               /* Hoehe des Histogramms */
 static LONG lv_x0, lv_y0, lv_w, lv_h, lv_gx, lv_gy, lv_ty, lv_oy, lv_by, lv_drag = -1;
-static LONG *lv_v;
+static const char *cd_names[4];         /* Kanalnamen/-farben (beim Curves-Dialog definiert) */
+static const ULONG cd_cols[4];
+static LONG *lv_v;              /* Werte des gewaehlten Kanals */
+static LONG *lv_master, (*lv_ch)[5], lv_c; /* RGB, R/G/B, gewaehlter Kanal 0..3 */
 
 /* Position des Gamma-Dreiecks: dort ergibt die Kurve 50 % */
 static LONG lv_gamma_x(void)
@@ -4459,10 +4462,13 @@ static void lv_draw(void)
     frame(lv_x0, lv_y0, lv_w, lv_h, COL_LINE);
     fill(lv_x0 + 1, lv_y0 + 1, lv_w - 2, 26, COL_PANELHD);
     text_bold(lv_x0 + 12, lv_y0 + 5, "Levels", COL_TEXT);
-    text(lv_x0 + 16, lv_y0 + 38, "Input Levels:", COL_DIM);
+    text(lv_x0 + 16, lv_y0 + 38, "Channel:", COL_DIM);
+    for (i = 0; i < 4; i++)
+        button(lv_x0 + 80 + i * 60, lv_y0 + 35, 56, 22, cd_names[i], i == lv_c);
+    text(lv_x0 + 16, lv_y0 + 68, "Input Levels:", COL_DIM);
     fill(lv_gx - 1, lv_gy - 1, 258, LV_HH + 2, COL_LINE);
     fill(lv_gx, lv_gy, 256, LV_HH, COL_FIELD);
-    hist_draw(hist[0], lv_gx, lv_gy, 256, LV_HH, 0xFFB4B4B4, 0xFF5A5A5A, lv_v[0], lv_v[2]);
+    hist_draw(hist[lv_c], lv_gx, lv_gy, 256, LV_HH, lv_c ? cd_cols[lv_c] : 0xFFB4B4B4, 0xFF5A5A5A, lv_v[0], lv_v[2]);
     lv_gradient(lv_gy + LV_HH + 3, 8);
     fill(lv_gx - 10, lv_ty, 276, 10, COL_BAR);
     lv_tri(lv_gx + lv_v[0], lv_ty, 0xFF000000, lv_drag == 0);
@@ -4489,13 +4495,13 @@ static void lv_auto(void)
     ULONG total = 0, clip, sum;
     LONG lo, hi;
     for (lo = 0; lo < 256; lo++)
-        total += hist[0][lo];
+        total += hist[lv_c][lo];
     if (!total)
         return;
     clip = total / 1000;
-    for (lo = 0, sum = 0; lo < 255 && (sum += hist[0][lo]) <= clip; lo++)
+    for (lo = 0, sum = 0; lo < 255 && (sum += hist[lv_c][lo]) <= clip; lo++)
         ;
-    for (hi = 255, sum = 0; hi > 0 && (sum += hist[0][hi]) <= clip; hi--)
+    for (hi = 255, sum = 0; hi > 0 && (sum += hist[lv_c][hi]) <= clip; hi--)
         ;
     if (hi - lo < 2) {
         lo = lo > 253 ? 253 : lo;
@@ -4576,19 +4582,32 @@ static void lv_edit(LONG i)
         lv_v[i] = v;
 }
 
-BOOL levels_dialog(LONG *v, void (*preview)(void))
+/* Kanal waehlen; neutraler (unbenutzter) Kanal bekommt Standardwerte */
+static void lv_select(LONG c)
 {
-    LONG saved[5], i;
+    static const LONG defs[5] = { 0, 100, 255, 0, 255 };
+    lv_c = c;
+    lv_v = c ? lv_ch[c - 1] : lv_master;
+    if (!lv_v[1])
+        memcpy(lv_v, defs, sizeof(defs));
+}
+
+BOOL levels_dialog(LONG *v, LONG (*ch)[5], void (*preview)(void))
+{
+    LONG saved[5], savedch[3][5], i;
     BOOL done = FALSE, ok = FALSE, changed = TRUE, need_preview = TRUE;
     ULONG preview_us = 0;
 
     memcpy(saved, v, sizeof(saved));
-    lv_v = v;
+    memcpy(savedch, ch, sizeof(savedch));
+    lv_master = v;
+    lv_ch = ch;
+    lv_select(0);
     lv_w = 256 + 84;
     lv_x0 = cvx + cvw - lv_w - 16;
     lv_y0 = cvy + 16;
     lv_gx = lv_x0 + 42;
-    lv_gy = lv_y0 + 60;
+    lv_gy = lv_y0 + 90;
     lv_ty = lv_gy + LV_HH + 12;
     lv_oy = lv_ty + 14 + 22 + 34;
     lv_by = lv_oy + 24 + 22 + 18;
@@ -4640,6 +4659,9 @@ BOOL levels_dialog(LONG *v, void (*preview)(void))
                     if (d3 < 0) d3 = -d3;
                     if (d4 < 0) d4 = -d4;
                     lv_drag = d3 < d4 || (d3 == d4 && px < lv_v[3]) ? 3 : 4;
+                } else if (my >= lv_y0 + 35 && my < lv_y0 + 57 && mx >= lv_x0 + 80 && mx < lv_x0 + 80 + 4 * 60) {
+                    lv_select((mx - lv_x0 - 80) / 60);
+                    changed = TRUE;
                 } else if (my >= lv_by && my < lv_by + 26) {
                     if (mx >= lv_x0 + 16 && mx < lv_x0 + 80) {
                         lv_auto();
@@ -4676,8 +4698,13 @@ BOOL levels_dialog(LONG *v, void (*preview)(void))
         }
     }
     view_overlay_cb = NULL;
-    if (!ok)
+    if (!ok) {
         memcpy(v, saved, sizeof(saved));
+        memcpy(ch, savedch, sizeof(savedch));
+    } else
+        for (i = 0; i < 3; i++)         /* unveraenderte Kanaele bleiben "neutral" (0) */
+            if (ch[i][0] == 0 && ch[i][1] == 100 && ch[i][2] == 255 && ch[i][3] == 0 && ch[i][4] == 255)
+                memset(ch[i], 0, sizeof(ch[i]));
     ui_draw_all();
     view_inval_all();
     view_flush();

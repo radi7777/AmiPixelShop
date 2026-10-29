@@ -53,6 +53,7 @@ struct Library *DataTypesBase;
 #define TAG_AMIG 0x414D4947 /* "AMIG": Farbtiefe und Aufloesung des Dokuments */
 #define TAG_QPAL 0x5150414C /* "QPAL": Palette der letzten Farbreduktion */
 #define TAG_FPAL 0x4650414C /* "FPAL": vorgegebene Palette (Fixed) */
+#define TAG_ALVL 0x414C564C /* "ALVL": Levels je Kanal einer Korrekturebene: LONG lv[3][5] */
 #define TAG_GENI 0x47454E49 /* "GENI": generative Ebene: ULONG mode, Prompt (UTF-8, 0-terminiert) */
 
 /* Kachel -> 4 Kanalebenen mit Differenzfilter */
@@ -311,7 +312,12 @@ static BOOL write_chunks(BPTR fh, Doc *d, Layer *l)
         if (!wr32(fh, TAG_GENI) || !wr32(fh, 4 + pl) || !wr32(fh, l->gen->mode) || !wr(fh, pb, pl))
             return FALSE;
     }
-    if (l->adj && (!wr32(fh, TAG_ADJ) || !wr32(fh, sizeof(AdjInfo)) || !wr(fh, l->adj, sizeof(AdjInfo))))
+    /* ADJ in der Groesse bis 0.6 (aeltere Versionen lesen ihn weiter), Kanal-Levels getrennt */
+    if (l->adj && (!wr32(fh, TAG_ADJ) || !wr32(fh, ADJINFO_V1) || !wr(fh, l->adj, ADJINFO_V1)))
+        return FALSE;
+    if (l->adj && l->adj->cmd == CMD_ADJ_LEVELS &&
+        (l->adj->lv[0][1] || l->adj->lv[1][1] || l->adj->lv[2][1]) &&
+        (!wr32(fh, TAG_ALVL) || !wr32(fh, sizeof(l->adj->lv)) || !wr(fh, l->adj->lv, sizeof(l->adj->lv))))
         return FALSE;
     if ((l->fill != 255 || l->lock) &&
         (!wr32(fh, TAG_FLLK) || !wr32(fh, 8) || !wr32(fh, l->fill) || !wr32(fh, l->lock)))
@@ -406,12 +412,15 @@ static BOOL read_chunks(BPTR fh, Doc *d, Layer *l, char *err)
             l->depth = (UBYTE)(v[1] < MAX_DEPTH ? v[1] : MAX_DEPTH - 1);
             l->pass = (UBYTE)v[2];
             l->collapsed = (UBYTE)v[3];
-        } else if (tag == TAG_ADJ && len == sizeof(AdjInfo)) {
-            if ((l->adj = AllocVec(sizeof(AdjInfo), MEMF_ANY))) {
-                if (!rd(fh, l->adj, sizeof(AdjInfo)))
+        } else if (tag == TAG_ADJ && len == ADJINFO_V1) {
+            if ((l->adj = AllocVec(sizeof(AdjInfo), MEMF_ANY | MEMF_CLEAR))) {
+                if (!rd(fh, l->adj, ADJINFO_V1))
                     break;
             } else
                 Seek(fh, len, OFFSET_CURRENT);
+        } else if (tag == TAG_ALVL && len == sizeof(((AdjInfo *)0)->lv) && l->adj) {
+            if (!rd(fh, l->adj->lv, len))
+                break;
         } else if (tag == TAG_FLLK && len == 8) {
             ULONG v[2];
             if (!rd(fh, v, 8))

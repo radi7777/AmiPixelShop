@@ -311,7 +311,11 @@ static void run_bricon(ULONG *p, LONG w, LONG h, const LONG *v, LONG ox, LONG oy
     run_lut(p, w, h, v, ox, oy);
 }
 
-static void run_levels(ULONG *p, LONG w, LONG h, const LONG *v, LONG ox, LONG oy)
+LONG levels_ch[3][5];
+static const LONG (*lv_cur)[5] = levels_ch;    /* Kanalwerte fuer run_levels */
+
+/* Tonwerttabelle aus Input Black, Gamma*100, Input White, Output Black, Output White */
+static void level_table(const LONG *v, UBYTE *out)
 {
     LONG i, ib = v[0], iw = v[2] > v[0] ? v[2] : v[0] + 1;
     float g = v[1] / 100.0f;
@@ -320,9 +324,31 @@ static void run_levels(ULONG *p, LONG w, LONG h, const LONG *v, LONG ox, LONG oy
         if (t < 0.0f) t = 0.0f;
         if (t > 1.0f) t = 1.0f;
         t = powf(t, 1.0f / g);
-        lut_r[i] = clamp255((LONG)(v[3] + t * (v[4] - v[3]) + 0.5f));
+        out[i] = clamp255((LONG)(v[3] + t * (v[4] - v[3]) + 0.5f));
     }
-    lut_all();
+}
+
+static BOOL level_neutral(const LONG *v)
+{
+    return v[1] == 0 || (v[0] == 0 && v[1] == 100 && v[2] == 255 && v[3] == 0 && v[4] == 255);
+}
+
+/* erst der Kanal, dann der Gesamtwert (RGB) */
+static void run_levels(ULONG *p, LONG w, LONG h, const LONG *v, LONG ox, LONG oy)
+{
+    UBYTE m[256], t[256];
+    UBYTE *dst[3];
+    LONG i, c;
+    dst[0] = lut_r; dst[1] = lut_g; dst[2] = lut_b;
+    level_table(v, m);
+    for (c = 0; c < 3; c++) {
+        if (lv_cur && !level_neutral(lv_cur[c])) {
+            level_table(lv_cur[c], t);
+            for (i = 0; i < 256; i++)
+                dst[c][i] = m[t[i]];
+        } else
+            memcpy(dst[c], m, 256);
+    }
     run_lut(p, w, h, v, ox, oy);
 }
 
@@ -1147,7 +1173,7 @@ static void hist_below(void)
 static BOOL levels_custom(void (*prev)(void))
 {
     hist_layer();
-    return levels_dialog(cur->val, prev);
+    return levels_dialog(cur->val, levels_ch, prev);
 }
 
 static BOOL curves_custom(void (*prev)(void))
@@ -1320,6 +1346,7 @@ void adjust_defaults(AdjInfo *a, LONG cmd)
     curves_reset();
     memcpy(a->curves, curves, sizeof(a->curves));
     memcpy(curves, save, sizeof(save));
+    memset(a->lv, 0, sizeof(a->lv));
 }
 
 /* Korrektur auf n Pixel (ARGB straight) anwenden; Tabellen-Korrekturen werden
@@ -1345,6 +1372,10 @@ void adjust_apply(const AdjInfo *a, ULONG *p, LONG n)
                 memcpy(curves, a->curves, sizeof(save));
                 f->run(ramp, 256, 1, a->v, 0, 0);
                 memcpy(curves, save, sizeof(save));
+            } else if (a->cmd == CMD_ADJ_LEVELS) {
+                lv_cur = (const LONG (*)[5])a->lv;
+                f->run(ramp, 256, 1, a->v, 0, 0);
+                lv_cur = levels_ch;
             } else
                 f->run(ramp, 256, 1, a->v, 0, 0);
             for (i = 0; i < 256; i++) {
@@ -1383,7 +1414,7 @@ BOOL adjust_dialog(AdjInfo *a, void (*prev)(void))
         return FALSE;
     if (a->cmd == CMD_ADJ_LEVELS) {
         hist_below();
-        return levels_dialog(a->v, prev);
+        return levels_dialog(a->v, a->lv, prev);
     }
     if (a->cmd == CMD_ADJ_CURVES) {
         Curve save[4];

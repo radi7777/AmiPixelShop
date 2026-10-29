@@ -328,6 +328,13 @@ void layer_test(const char *outdir)
         l = doc->layers[doc->active];
         l->adj->v[0] = 40; l->adj->v[1] = 25; l->adj->v[2] = -10;
     }
+    /* Levels mit eigenem Rot- und Blaukanal (Chunk ALVL) */
+    if (doc_new_adjust(CMD_ADJ_LEVELS, NULL)) {
+        static const LONG r[5] = { 30, 140, 220, 10, 250 }, b[5] = { 0, 70, 255, 40, 255 };
+        l = doc->layers[doc->active];
+        memcpy(l->adj->lv[0], r, sizeof(r));
+        memcpy(l->adj->lv[2], b, sizeof(b));
+    }
     doc_mark_all_dirty();
     doc_process_dirty();
     sprintf(path, "%s/before.png", outdir);
