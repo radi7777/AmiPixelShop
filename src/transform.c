@@ -29,6 +29,7 @@ static ULONG *fpx;              /* schwebende Pixel, premultiplied */
 static UBYTE *fsel;             /* zugehoerige Auswahl (oder NULL) */
 static LONG fx0, fy0, fw, fh;   /* Lage der Quelle */
 static BOOL tf_hadsel;
+static BOOL tf_text;            /* Textebene ohne Auswahl: bleibt Text (Abbildung geht in die Matrix) */
 
 /* aktuelle Abbildung */
 static float tcx, tcy, tsx = 1.0f, tsy = 1.0f, tang;
@@ -573,7 +574,9 @@ BOOL transform_begin(void)
     LONG n = doc->tw * doc->th, i, x, y;
     if (tf_on)
         return TRUE;
-    doc_rasterize_text(doc->layers[doc->active]);
+    tf_text = doc->layers[doc->active]->text && !doc->hassel;
+    if (!tf_text)
+        doc_rasterize_text(doc->layers[doc->active]);
     doc_cache_below(doc->active);   /* Unterbau aendert sich beim Ziehen nicht */
     tf_layer = doc->layers[doc->active];
     tf_hadsel = doc->hassel;
@@ -705,6 +708,18 @@ void transform_apply(void)
         transform_cancel();     /* nichts veraendert */
         return;
     }
+    if (tf_text && tf_mode == TM_AFFINE) {
+        /* Text: Vorschau verwerfen, Abbildung auf Anker und Matrix, neu rendern */
+        float c = cosf(tang), s = sinf(tang), L[4];
+        float sx = fx0 + fw * 0.5f, sy = fy0 + fh * 0.5f, dx = tcx, dy = tcy;
+        Layer *l = tf_layer;
+        L[0] = c * tsx; L[1] = -s * tsy; L[2] = s * tsx; L[3] = c * tsy;
+        transform_cancel();
+        text_transform(l, L, sx, sy, dx, dy, "Free Transform");
+        return;
+    }
+    if (tf_text)
+        doc_rasterize_text(tf_layer);   /* Distort/Perspective/Warp: wie Photoshop zu Pixeln */
     render(TRUE);               /* endgueltig in voller Qualitaet */
     doc_cache_drop();
     n = doc->tw * doc->th;
@@ -749,6 +764,16 @@ void transform_cancel(void)
 /* Spiegeln / Drehen in einem Schritt (naechster Nachbar = pixelgenau) */
 void transform_quick(float sx, float sy, float ang)
 {
+    Layer *l = doc->layers[doc->active];
+    if (l->text && !doc->hassel) {
+        /* Text bleibt Text: um die Mitte des Umrisses */
+        TextInfo *t = l->text;
+        float c = cosf(ang), s = sinf(ang), L[4];
+        float mx = (t->bx0 + t->bx1) * 0.5f, my = (t->by0 + t->by1) * 0.5f;
+        L[0] = c * sx; L[1] = -s * sy; L[2] = s * sx; L[3] = c * sy;
+        text_transform(l, L, mx, my, mx, my, "Transform");
+        return;
+    }
     if (!transform_begin())
         return;
     tsx = sx;

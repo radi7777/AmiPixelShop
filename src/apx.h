@@ -433,6 +433,7 @@ BOOL text_begin_edit(Layer *l);
 BOOL text_begin_box(LONG x, LONG y, LONG w, LONG h);
 void text_box_preview(LONG x0, LONG y0, LONG x1, LONG y1);
 Layer *text_layer_at(LONG x, LONG y);
+BOOL text_transform(Layer *l, const float *L, float sx, float sy, float dx, float dy, const char *undo_name);
 void text_commit(void);
 void text_cancel(void);
 void text_key_char(UBYTE c);

@@ -652,6 +652,63 @@ BOOL text_begin_edit(Layer *l)
     return TRUE;
 }
 
+/* Textebene affin abbilden (Free Transform, Spiegeln, Drehen): Punkt p ->
+ * (dx, dy) + L * (p - (sx, sy)). Der Text bleibt editierbar und wird neu
+ * gerendert; gleichmaessiges Skalieren geht in die Schriftgroesse (scharf). */
+BOOL text_transform(Layer *l, const float *L, float sx, float sy, float dx, float dy, const char *undo_name)
+{
+    float M[4], det = L[0] * L[3] - L[1] * L[2], sc, ax, ay;
+    LONG nsize, k;
+    if (det > -1e-6f && det < 1e-6f)
+        return FALSE;
+    if (!text_begin_edit(l))
+        return FALSE;
+    if (undo_name) {
+        strncpy(tx_undo->name, undo_name, sizeof(tx_undo->name) - 1);
+        tx_undo->name[sizeof(tx_undo->name) - 1] = 0;
+    }
+    /* Anker mitnehmen */
+    ax = dx + L[0] * (tx_x - sx) + L[1] * (tx_y - sy);
+    ay = dy + L[2] * (tx_x - sx) + L[3] * (tx_y - sy);
+    tx_x = (LONG)floorf(ax + 0.5f);
+    tx_y = (LONG)floorf(ay + 0.5f);
+    /* neue Matrix = L * alte */
+    M[0] = L[0] * tx_m[0] + L[1] * tx_m[2];
+    M[1] = L[0] * tx_m[1] + L[1] * tx_m[3];
+    M[2] = L[2] * tx_m[0] + L[3] * tx_m[2];
+    M[3] = L[2] * tx_m[1] + L[3] * tx_m[3];
+    /* gleichmaessiger Anteil (Spalten gleich lang und senkrecht) -> Schriftgroesse */
+    {
+        float c0 = sqrtf(M[0] * M[0] + M[2] * M[2]), c1 = sqrtf(M[1] * M[1] + M[3] * M[3]);
+        float dot = M[0] * M[1] + M[2] * M[3];
+        sc = c0;
+        if (c0 > 0.0f && fabsf(c0 - c1) < 0.01f * c0 && fabsf(dot) < 0.01f * c0 * c1 && fabsf(sc - 1.0f) > 0.001f) {
+            nsize = (LONG)floorf(text_size * sc + 0.5f);
+            if (nsize < 1)
+                nsize = 1;
+            sc = (float)nsize / text_size;         /* tatsaechlicher Faktor */
+            text_size = nsize;
+            if (text_lead > 0)
+                text_lead = (LONG)floorf(text_lead * sc + 0.5f);
+            tx_boxw = (LONG)floorf(tx_boxw * sc + 0.5f);
+            tx_boxh = (LONG)floorf(tx_boxh * sc + 0.5f);
+            for (k = 0; k < 4; k++)
+                M[k] /= sc;
+        }
+    }
+    for (k = 0; k < 4; k++)
+        tx_m[k] = M[k];
+    /* fast Einheitsmatrix: genau setzen (keine Glaettung durch Resampling) */
+    if (fabsf(M[0] - 1.0f) < 1e-4f && fabsf(M[3] - 1.0f) < 1e-4f && fabsf(M[1]) < 1e-4f && fabsf(M[2]) < 1e-4f) {
+        tx_m[0] = tx_m[3] = 1.0f;
+        tx_m[1] = tx_m[2] = 0.0f;
+    }
+    tx_xf = !(tx_m[0] == 1.0f && tx_m[1] == 0.0f && tx_m[2] == 0.0f && tx_m[3] == 1.0f);
+    render();
+    text_commit();
+    return TRUE;
+}
+
 /* oberste sichtbare Textebene unter dem Punkt */
 Layer *text_layer_at(LONG x, LONG y)
 {
