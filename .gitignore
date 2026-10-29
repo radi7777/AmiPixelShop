@@ -2,3 +2,4 @@ build/
 .DS_Store
 PLAN.md
 *.o
+__pycache__/
