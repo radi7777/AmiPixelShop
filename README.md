@@ -36,11 +36,11 @@ as the Amiga allows. Development is done with the help of **Claude** (Anthropic)
 | **AI** | Generative Fill with a text prompt, Remove (button or brush), Extend / outpainting, Select Subject, Remove Background - variants and Generate again, via OpenRouter directly from the Amiga (AmiSSL) |
 | **Layers** | Up to 64 layers, 25 blend modes, opacity & fill, locks, groups (pass through / isolated), multi-selection, drag &amp; drop |
 | **Masks** | Layer and group masks (linked or unlinked), clipping masks |
-| **Adjustments** | Levels with histogram, draggable sliders and Auto; Curves with histogram; Brightness/Contrast, Hue/Saturation, Threshold, Posterize, ... |
+| **Adjustments** | Levels with histogram, draggable sliders, Auto and per-channel R/G/B; Curves with histogram; Brightness/Contrast, Hue/Saturation, Threshold, Posterize, ... |
 | **Non-destructive** | Adjustment layers (Levels, Curves, Hue/Saturation, ...), layer styles (Drop Shadow, Outer Glow, Stroke), live Properties panel |
 | **Painting** | Brush, Eraser, Clone Stamp, History Brush, Spot Healing, Blur/Sharpen/Smudge, Dodge/Burn, Gradient, Paint Bucket, Shapes |
-| **Selections** | Marquee, Lasso, Polygonal Lasso, Quick Selection, Magic Wand, Color Range, Grow, Similar, Feather, Expand/Contract |
-| **Type** | TrueType/OpenType text that stays editable - alignment, tracking, leading, anti-aliasing |
+| **Selections** | Marquee, Lasso, Polygonal Lasso, Magnetic Lasso, Quick Selection, Magic Wand, Color Range, Grow, Similar, Feather, Expand/Contract, Border, Smooth |
+| **Type** | TrueType/OpenType text that stays editable - also when rotated, flipped or transformed - alignment, tracking, leading, anti-aliasing |
 | **Paths** | Pen tool with Bezier curves, Paths panel - make selection, fill, stroke; undoable and saved |
 | **Transform** | Free Transform, Distort, Perspective, Warp, Crop, Image/Canvas Size, Image Rotation, Trim, Reveal All |
 | **Filters** | Liquify, Gaussian, Box & Motion Blur, Unsharp Mask, Sharpen, Median, Add Noise, Emboss, Find Edges, High Pass, Mosaic |

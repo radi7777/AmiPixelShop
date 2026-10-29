@@ -3,13 +3,13 @@ Kurz:         Ebenen-Bildbearbeitung, RTG/PiStorm
 Author:       radi777
 Uploader:     thomas.radeck gmail com (radi777, see note below)
 Type:         gfx/edit
-Version:      0.6.1
+Version:      0.7
 Architecture: m68k-amigaos >= 3.2.0
 Requires:     PiStorm (Emu68) or 68060+FPU, RTG 24/32 bit, 128 MB RAM
 Distribution: Aminet
 
-AmiPixelShop 0.6.1 - Early Beta
-===============================
+AmiPixelShop 0.7 - Early Beta
+=============================
 
 A modern, layer-based image editor written natively for the Amiga.
 Not a port and nothing reverse-engineered: written from scratch in plain
@@ -33,12 +33,14 @@ Features
 - Layer styles: drop shadow, outer glow, stroke
 - Brush, eraser, clone stamp, history brush, spot healing, blur/sharpen/
   smudge, dodge/burn, gradient, paint bucket, shapes
-- Marquee, lasso, quick selection, magic wand, color range, grow, similar
-- Editable TrueType text, pen tool with Bezier paths
+- Marquee, lasso, magnetic lasso, quick selection, magic wand, color range,
+  grow, similar, border, smooth
+- Editable TrueType text (stays editable when rotated or transformed),
+  pen tool with Bezier paths
 - Free transform, crop, image/canvas size, image rotation
 - Filters: gaussian/box/motion blur, unsharp mask, median, noise, emboss,
   find edges, high pass, mosaic
-- Levels with histogram and Auto, Curves with histogram
+- Levels with histogram, Auto and per-channel R/G/B, Curves with histogram
 - Undo/redo with history panel, multiple documents
 - Built-in update: checks GitHub at start (when online), installs
   new versions and restarts (can be turned off in the Help menu)
