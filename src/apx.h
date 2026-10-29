@@ -470,7 +470,7 @@ BOOL move_active(void);
 void move_nudge(LONG dx, LONG dy);
 
 /* ---- Oberflaeche (ui.c) ---- */
-enum { T_MOVE, T_RECT, T_ELLIPSE, T_LASSO, T_POLY, T_QUICKSEL, T_WAND, T_CROP, T_EYEDROP,
+enum { T_MOVE, T_RECT, T_ELLIPSE, T_LASSO, T_POLY, T_MAGNETIC, T_QUICKSEL, T_WAND, T_CROP, T_EYEDROP,
        T_BRUSH, T_CLONE, T_HISTBRUSH, T_HEAL, T_ERASER, T_GRADIENT, T_BUCKET, T_BLUR, T_DODGE, T_PEN, T_TEXT, T_SHAPE, T_HAND, T_ZOOM, T_COUNT };
 
 /* tools.c: Verlauf und Fuellwerkzeug */
@@ -577,6 +577,17 @@ void clone_begin(float x, float y);
 extern LONG tool;
 extern LONG sel_mode;
 extern LONG wand_tol;
+/* Magnetisches Lasso (maglasso.c) */
+extern LONG mag_width, mag_contrast, mag_freq;
+BOOL mag_active(void);
+BOOL mag_begin(float x, float y);
+void mag_move(float x, float y);
+void mag_update(void);
+void mag_click(float x, float y);
+BOOL mag_back(void);
+LONG mag_close(void);
+void mag_end(void);
+BOOL mag_near_start(LONG sx, LONG sy);
 extern BOOL wand_contig, wand_aa;
 
 /* Modaler Dialog mit Reglern; TRUE = OK. div > 1: Anzeige als Kommazahl (Wert / div).

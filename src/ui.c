@@ -23,7 +23,7 @@ extern void main_tool_changed(void);
 
 static const char *tool_names[T_COUNT] = {
     "Move Tool (V)", "Rectangular Marquee (M)", "Elliptical Marquee (M)",
-    "Lasso Tool (L)", "Polygonal Lasso (L)", "Quick Selection Tool (W)", "Magic Wand (W)", "Crop Tool (C)", "Eyedropper (I)",
+    "Lasso Tool (L)", "Polygonal Lasso (L)", "Magnetic Lasso (L)", "Quick Selection Tool (W)", "Magic Wand (W)", "Crop Tool (C)", "Eyedropper (I)",
     "Brush Tool (B)", "Clone Stamp Tool (S)", "History Brush Tool (Y)", "Spot Healing Brush Tool (J)", "Eraser Tool (E)", "Gradient Tool (G)",
     "Paint Bucket Tool (G)", "Blur Tool (R)", "Dodge Tool (O)", "Pen Tool (P)", "Horizontal Type Tool (T)", "Shape Tool (U)", "Hand Tool (H)", "Zoom Tool (Z)"
 };
@@ -248,6 +248,9 @@ static Slider sl_tol   = { "Tolerance:", &wand_tol, 0, 255, "", FALSE, nop_chang
 static void text_size_changed(void) { text_refresh(); }
 static Slider sl_gopac = { "Opacity:", &grad_opacity, 1, 100, "%", FALSE, nop_changed };
 static Slider sl_btol  = { "Tolerance:", &bucket_tol, 0, 255, "", FALSE, nop_changed };
+static Slider sl_mwidth = { "Width:", &mag_width, 1, 40, "px", FALSE, nop_changed };
+static Slider sl_mcontr = { "Contrast:", &mag_contrast, 1, 100, "%", FALSE, nop_changed };
+static Slider sl_mfreq  = { "Frequency:", &mag_freq, 0, 100, "", FALSE, nop_changed };
 static Slider sl_bopac = { "Opacity:", &bucket_opacity, 1, 100, "%", FALSE, nop_changed };
 static Slider sl_sstroke = { "Stroke:", &shape_stroke_w, 0, 100, "px", FALSE, nop_changed };
 static Slider sl_sweight = { "Weight:", &shape_weight, 1, 100, "px", FALSE, nop_changed };
@@ -841,6 +844,16 @@ void ui_draw_options(void)
         }
         text(x, ty, "Shift: square/circle/45°   Each shape gets its own layer", COL_DIM);
         break; }
+    case T_MAGNETIC:
+        x = draw_modes(x, y) + 16;
+        opt_sliders[n_opt_sliders++] = &sl_mwidth;
+        x = slider_draw(&sl_mwidth, x, ty) + 10;
+        opt_sliders[n_opt_sliders++] = &sl_mcontr;
+        x = slider_draw(&sl_mcontr, x, ty) + 10;
+        opt_sliders[n_opt_sliders++] = &sl_mfreq;
+        x = slider_draw(&sl_mfreq, x, ty) + 14;
+        text(x, ty, "Click: anchor  Backspace: undo  Return: close", COL_DIM);
+        break;
     case T_RECT:
     case T_ELLIPSE:
     case T_LASSO:
@@ -967,7 +980,7 @@ static LONG tool_group(LONG t)
 {
     switch (t) {
     case T_RECT: case T_ELLIPSE: return T_RECT;
-    case T_LASSO: case T_POLY: return T_LASSO;
+    case T_LASSO: case T_POLY: case T_MAGNETIC: return T_LASSO;
     case T_QUICKSEL: case T_WAND: return T_QUICKSEL;
     case T_GRADIENT: case T_BUCKET: return T_GRADIENT;
     }
@@ -1048,6 +1061,7 @@ static const char *tool_desc[T_COUNT] = {
     "Selects an elliptical area",
     "Draws a freehand selection",
     "Selects with straight-edged segments",
+    "Snaps to edges while you move along them",
     "Paint over an object - the selection snaps to its edges",
     "Selects areas of similar color",
     "Crops the image or extends the canvas",

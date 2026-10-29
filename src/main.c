@@ -127,6 +127,7 @@ static LONG mode_from_qual(UWORD qual)
 
 static void cancel_path(void)
 {
+    mag_end();
     path_n = 0;
     path_rubber = FALSE;
     path_closed_preview = FALSE;
@@ -163,6 +164,15 @@ static void add_path_point(float x, float y)
         path_y[path_n] = y;
         path_n++;
     }
+}
+
+/* Magnetisches Lasso zum Start schliessen und auswaehlen */
+static void finish_mag(void)
+{
+    if (mag_close() >= 3)
+        sel_polygon(path_x, path_y, path_n, drag_mode);
+    cancel_path();
+    selection_changed();
 }
 
 static void finish_poly(void)
@@ -468,6 +478,18 @@ static void mouse_down(UWORD qual, ULONG secs, ULONG mics)
         }
         view_path_changed();
         break;
+    case T_MAGNETIC:
+        if (!mag_active()) {
+            drag_mode = mode_from_qual(qual);
+            if (!mag_begin(dx, dy))
+                status_message("Not enough memory");
+        } else if (mag_near_start(mouse_x, mouse_y) ||
+                   (abs(mouse_x - last_cx) <= 4 && abs(mouse_y - last_cy) <= 4 &&
+                    DoubleClick(last_secs, last_mics, secs, mics)))
+            finish_mag();
+        else
+            mag_click(dx, dy);
+        break;
     case T_QUICKSEL: {
         LONG m = mode_from_qual(qual);
         sel_quick_begin(m);
@@ -594,6 +616,8 @@ static void mouse_move(void)
         view_path_changed();
     } else if (marquee_drag)
         marquee_preview(dx, dy);
+    else if (mag_active())
+        mag_move(dx, dy);
     else if (poly_active) {
         rubber_x = mouse_x;
         rubber_y = mouse_y;
@@ -833,6 +857,8 @@ static BOOL handle_key(UWORD code, UWORD qual)
             do_command(CMD_CROP_COMMIT);
         else if (poly_active)
             finish_poly();
+        else if (mag_active())
+            finish_mag();
         else if (tool == T_PEN && cmd)
             do_command(CMD_PATH_SEL);   /* wie Photoshop: Strg+Enter */
         else if (tool == T_PEN)
@@ -842,6 +868,9 @@ static BOOL handle_key(UWORD code, UWORD qual)
         if (tool == T_PEN && path_exists() && !alt && !cmd) {
             path_delete_last();
             ui_draw_options();
+        } else if (mag_active()) {
+            if (!mag_back())
+                cancel_path();
         } else if (poly_active) {
             if (path_n > 1) {
                 path_n--;
@@ -962,8 +991,8 @@ static BOOL handle_key(UWORD code, UWORD qual)
     case 'v': ui_set_tool(T_MOVE); break;
     case 'm': if (tool != T_RECT && tool != T_ELLIPSE) ui_set_tool(T_RECT); break;
     case 'M': ui_set_tool(tool == T_RECT ? T_ELLIPSE : T_RECT); break;
-    case 'l': if (tool != T_LASSO && tool != T_POLY) ui_set_tool(T_LASSO); break;
-    case 'L': ui_set_tool(tool == T_LASSO ? T_POLY : T_LASSO); break;
+    case 'l': if (tool != T_LASSO && tool != T_POLY && tool != T_MAGNETIC) ui_set_tool(T_LASSO); break;
+    case 'L': ui_set_tool(tool == T_LASSO ? T_POLY : tool == T_POLY ? T_MAGNETIC : T_LASSO); break;
     case 'i': ui_set_tool(T_EYEDROP); break;
     case 'c': ui_set_tool(T_CROP); break;
     case 'p': ui_set_tool(T_PEN); break;
@@ -2600,6 +2629,7 @@ int main(int argc, char **argv)
             }
         }
         apply_move();
+        mag_update();
         view_flush();
     }
 
