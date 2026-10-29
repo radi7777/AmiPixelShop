@@ -466,6 +466,11 @@ LONG mag_close(void)
     LONG n;
     if (!active)
         return 0;
+    /* bewegliche Linie zur Maus festhalten, dann zum Start: sonst ginge sie verloren,
+     * solange noch kein Zwischenanker gesetzt war (Weg Start -> Start) */
+    mag_update();               /* noch nicht ausgewertete Mausposition */
+    if (path_n > path_fix)
+        fix_to(path_n - 1);
     live_to((LONG)path_x[0], (LONG)path_y[0]);
     n = path_n;
     if (n > 1 && path_x[n - 1] == path_x[0] && path_y[n - 1] == path_y[0])

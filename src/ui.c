@@ -16,6 +16,7 @@
 
 LONG tool = T_BRUSH;
 LONG sel_mode = SEL_NEW;
+static LONG tool_sel_mode[T_COUNT];     /* gemerkter Auswahlmodus je Werkzeug (0 = SEL_NEW) */
 LONG wand_tol = 32;
 BOOL wand_contig = TRUE, wand_aa = TRUE;
 
@@ -2703,7 +2704,11 @@ void ui_set_tool(LONG t)
     tt_id = -1;                 /* Tooltip erst nach neuer Mausbewegung */
     if (t == tool)
         return;
+    /* Auswahlmodus gilt je Werkzeug (wie Photoshop): die Schnellauswahl schaltet
+     * nach dem ersten Zug auf Add, das darf nicht fuer Lasso & Co. gelten */
+    tool_sel_mode[tool] = sel_mode;
     tool = t;
+    sel_mode = tool_sel_mode[t];
     ui_draw_toolbar();
     ui_draw_options();
     main_tool_changed();
