@@ -1480,23 +1480,6 @@ void do_command(LONG c)
             deg = arb;
         }
         finish_interaction();
-        {
-            /* gedrehter Text kann nicht editierbar bleiben: vorher fragen (Undo holt ihn zurueck) */
-            LONG i, nt = 0;
-            char msg[120];
-            for (i = 0; i < doc->nlayers; i++)
-                nt += doc->layers[i]->text != NULL;
-            if (nt) {
-                BOOL flip = c == CMD_IFLIP_H || c == CMD_IFLIP_V;
-                const char *verb = flip ? "Flip" : "Rotate";
-                if (nt == 1)
-                    sprintf(msg, "The type layer will be converted to pixels.\n%s anyway?", verb);
-                else
-                    sprintf(msg, "%ld type layers will be converted to pixels.\n%s anyway?", (long)nt, verb);
-                if (request(msg, flip ? "Flip|Cancel" : "Rotate|Cancel") != 1)
-                    break;
-            }
-        }
         busy(TRUE);
         r = doc_rotate(deg, c == CMD_IFLIP_H, c == CMD_IFLIP_V,
                        c == CMD_IFLIP_H ? "Flip Canvas Horizontal" : c == CMD_IFLIP_V ? "Flip Canvas Vertical" :

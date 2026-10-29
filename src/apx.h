@@ -50,9 +50,12 @@ typedef struct TextInfo {
     LONG tracking;              /* 1/1000 em */
     LONG leading;               /* Zeilenabstand px, 0 = Auto */
     LONG boxw, boxh;            /* Absatztext: Rahmen (x, y = oben links), 0 = Punkttext */
+    LONG m[4];                  /* Drehen/Spiegeln um den Anker (x, y): a b c d in 1/65536,
+                                 * Punkt = Anker + (a b; c d) * (p - Anker); alles 0 = keine */
 } TextInfo;
 #define TEXTINFO_V1 352         /* Groesse ohne die angehaengten Felder */
 #define TEXTINFO_V2 368         /* mit align .. leading */
+#define TEXTINFO_V3 376         /* mit boxw, boxh (bis 0.6.1; m steht im Chunk TMAT) */
 
 /* Ueberhang: Pixel einer Ebene ausserhalb der Arbeitsflaeche (ARGB straight;
  * Pixel innerhalb der Flaeche werden nicht benutzt) */

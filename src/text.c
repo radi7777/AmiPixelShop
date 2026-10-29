@@ -3,8 +3,9 @@
  *
  * TrueType/OpenType ueber stb_truetype. Klick setzt die Grundlinie, getippt
  * wird direkt ins Bild auf eine neue Ebene (live gerendert, geglaettet, mit
- * Kerning). Uebernehmen legt einen Undo-Eintrag an; die Ebene ist danach eine
- * normale Pixel-Ebene.
+ * Kerning). Uebernehmen legt einen Undo-Eintrag an; die Ebene bleibt eine
+ * Textebene (TextInfo). Gedrehter/gespiegelter Text (Matrix m um den Anker)
+ * wird ungedreht in einen Deckungspuffer gerendert und dann gedreht gestempelt.
  */
 #include <exec/types.h>
 #include <exec/memory.h>
@@ -44,6 +45,11 @@ static LONG car_x, car_y0, car_y1;     /* Schreibmarke (Dokument) */
 static LONG cv_x0, cv_y0, cv_x1, cv_y1; /* Overlay-Box am Schirm */
 static LONG tx_boxw, tx_boxh;   /* Absatztext: Rahmen ab (tx_x, tx_y), 0 = Punkttext */
 static float tx_scale;
+static float tx_m[4] = { 1.0f, 0.0f, 0.0f, 1.0f };     /* Drehen/Spiegeln um (tx_x, tx_y) */
+static BOOL tx_xf;              /* tx_m ist nicht die Einheitsmatrix */
+static UBYTE *cov;              /* gedrehter Text: Deckung ungedreht, Umriss cov_x0.. */
+static LONG cov_x0, cov_y0, cov_w, cov_h;
+static BOOL measuring;          /* erster Durchgang: nur Umriss */
 
 BOOL text_active(void)
 {
@@ -209,6 +215,89 @@ static void put(LONG x, LONG y, ULONG a)
     }
 }
 
+/* Glyphenpixel: ungedreht direkt in die Ebene, sonst in den Deckungspuffer */
+static void plot(LONG x, LONG y, ULONG a)
+{
+    UBYTE *c;
+    if (!tx_xf) {
+        put(x, y, a);
+        return;
+    }
+    x -= cov_x0;
+    y -= cov_y0;
+    if (x < 0 || y < 0 || x >= cov_w || y >= cov_h || !a)
+        return;
+    c = &cov[y * cov_w + x];
+    *c = (UBYTE)(*c + a - (*c * a + 127) / 255);  /* Vereinigung wie "over" bei gleicher Farbe */
+}
+
+/* Punkt (Dokument, ungedreht) -> gedreht um den Anker */
+static void xf_point(float x, float y, float *ox, float *oy)
+{
+    float dx = x - tx_x, dy = y - tx_y;
+    *ox = tx_x + tx_m[0] * dx + tx_m[1] * dy;
+    *oy = tx_y + tx_m[2] * dx + tx_m[3] * dy;
+}
+
+static void set_matrix(const LONG *m)
+{
+    if (m && (m[0] || m[1] || m[2] || m[3])) {
+        LONG i;
+        for (i = 0; i < 4; i++)
+            tx_m[i] = m[i] / 65536.0f;
+    } else {
+        tx_m[0] = tx_m[3] = 1.0f;
+        tx_m[1] = tx_m[2] = 0.0f;
+    }
+    tx_xf = !(tx_m[0] == 1.0f && tx_m[1] == 0.0f && tx_m[2] == 0.0f && tx_m[3] == 1.0f);
+}
+
+/* Deckungspuffer gedreht in die Ebene; Umriss tx_bx0.. wird der gedrehte */
+static void stamp_transformed(void)
+{
+    float det = tx_m[0] * tx_m[3] - tx_m[1] * tx_m[2], ia, ib, ic, id;
+    float xs[4], ys[4], fx0 = 1e9f, fy0 = 1e9f, fx1 = -1e9f, fy1 = -1e9f;
+    LONG k, x, y, X0, Y0, X1, Y1;
+    if (det > -1e-6f && det < 1e-6f)
+        return;
+    ia = tx_m[3] / det; ib = -tx_m[1] / det; ic = -tx_m[2] / det; id = tx_m[0] / det;
+    xf_point((float)cov_x0, (float)cov_y0, &xs[0], &ys[0]);
+    xf_point((float)(cov_x0 + cov_w), (float)cov_y0, &xs[1], &ys[1]);
+    xf_point((float)cov_x0, (float)(cov_y0 + cov_h), &xs[2], &ys[2]);
+    xf_point((float)(cov_x0 + cov_w), (float)(cov_y0 + cov_h), &xs[3], &ys[3]);
+    for (k = 0; k < 4; k++) {
+        if (xs[k] < fx0) fx0 = xs[k];
+        if (xs[k] > fx1) fx1 = xs[k];
+        if (ys[k] < fy0) fy0 = ys[k];
+        if (ys[k] > fy1) fy1 = ys[k];
+    }
+    X0 = (LONG)floorf(fx0) - 1; Y0 = (LONG)floorf(fy0) - 1;
+    X1 = (LONG)ceilf(fx1) + 1;  Y1 = (LONG)ceilf(fy1) + 1;
+    tx_bx0 = X0; tx_by0 = Y0; tx_bx1 = X1; tx_by1 = Y1;
+    if (X0 < 0) X0 = 0;
+    if (Y0 < 0) Y0 = 0;
+    if (X1 > doc->w) X1 = doc->w;
+    if (Y1 > doc->h) Y1 = doc->h;
+    for (y = Y0; y < Y1; y++)
+        for (x = X0; x < X1; x++) {
+            /* Pixelmitte zurueck in den ungedrehten Text, bilinear */
+            float dx = x + 0.5f - tx_x, dy = y + 0.5f - tx_y;
+            float u = tx_x + ia * dx + ib * dy - cov_x0 - 0.5f, v = tx_y + ic * dx + id * dy - cov_y0 - 0.5f;
+            LONG iu = (LONG)floorf(u), iv = (LONG)floorf(v), fu, fv, a;
+            ULONG p00, p10, p01, p11;
+            if (iu < -1 || iv < -1 || iu >= cov_w || iv >= cov_h)
+                continue;
+            fu = (LONG)((u - iu) * 256.0f);
+            fv = (LONG)((v - iv) * 256.0f);
+#define CV(xx, yy) ((xx) >= 0 && (yy) >= 0 && (xx) < cov_w && (yy) < cov_h ? cov[(yy) * cov_w + (xx)] : 0)
+            p00 = CV(iu, iv); p10 = CV(iu + 1, iv); p01 = CV(iu, iv + 1); p11 = CV(iu + 1, iv + 1);
+#undef CV
+            a = ((p00 * (256 - fu) + p10 * fu) * (256 - fv) + (p01 * (256 - fu) + p11 * fu) * fv + 32768) >> 16;
+            if (a)
+                put(x, y, a);
+        }
+}
+
 static ULONG next_cp(const UBYTE **sp)
 {
     const UBYTE *s = *sp;
@@ -219,16 +308,43 @@ static ULONG next_cp(const UBYTE **sp)
     return c;
 }
 
+/* Punkt des ungedrehten Textes -> Bildschirm */
+static void scr_point(float x, float y, LONG *sx, LONG *sy)
+{
+    float ox, oy;
+    xf_point(x, y, &ox, &oy);
+    *sx = doc2scrx(ox);
+    *sy = doc2scry(oy);
+}
+
+/* Bildschirm-Umriss der vier Ecken eines (ungedrehten) Rechtecks, um r erweitert */
+static void scr_box(float x0, float y0, float x1, float y1, LONG r, LONG *bx0, LONG *by0, LONG *bx1, LONG *by1)
+{
+    LONG xs[4], ys[4], k;
+    scr_point(x0, y0, &xs[0], &ys[0]);
+    scr_point(x1, y0, &xs[1], &ys[1]);
+    scr_point(x0, y1, &xs[2], &ys[2]);
+    scr_point(x1, y1, &xs[3], &ys[3]);
+    *bx0 = *bx1 = xs[0];
+    *by0 = *by1 = ys[0];
+    for (k = 1; k < 4; k++) {
+        if (xs[k] < *bx0) *bx0 = xs[k];
+        if (xs[k] > *bx1) *bx1 = xs[k];
+        if (ys[k] < *by0) *by0 = ys[k];
+        if (ys[k] > *by1) *by1 = ys[k];
+    }
+    *bx0 -= r; *by0 -= r; *bx1 += r + 1; *by1 += r + 1;
+}
+
 static void caret_inval(void)
 {
+    LONG a, b, c, d;
     view_inval(cv_x0, cv_y0, cv_x1, cv_y1);
-    if (tx_boxw > 0)
-        view_inval(doc2scrx((float)tx_x) - 2, doc2scry((float)tx_y) - 2,
-                   doc2scrx((float)(tx_x + tx_boxw)) + 3, doc2scry((float)(tx_y + tx_boxh)) + 3);
-    cv_x0 = doc2scrx((float)car_x) - 2;
-    cv_x1 = doc2scrx((float)car_x) + 3;
-    cv_y0 = doc2scry((float)car_y0) - 2;
-    cv_y1 = doc2scry((float)car_y1) + 3;
+    if (tx_boxw > 0) {
+        scr_box((float)tx_x, (float)tx_y, (float)(tx_x + tx_boxw), (float)(tx_y + tx_boxh), 2, &a, &b, &c, &d);
+        view_inval(a, b, c, d);
+    }
+    scr_box((float)car_x, (float)car_y0, (float)car_x, (float)car_y1, 2, &cv_x0, &cv_y0, &cv_x1, &cv_y1);
     view_inval(cv_x0, cv_y0, cv_x1, cv_y1);
 }
 
@@ -289,10 +405,10 @@ static const UBYTE *wrap_line(const UBYTE *s, const UBYTE **next)
 
 static void render(void)
 {
-    LONG i, n = doc->tw * doc->th, lh, pen_y;
+    LONG i, n = doc->tw * doc->th, lh, pen_y = 0, pass;
     int asc, desc, gap;
-    float scale, pen_x;
-    const UBYTE *s = (const UBYTE *)tx_buf;
+    float scale, pen_x = 0.0f;
+    const UBYTE *s;
     ULONG prev = 0;
     UBYTE *gbuf = NULL;
     LONG gsize = 0;
@@ -328,6 +444,25 @@ static void render(void)
     tx_scale = scale;
     stbtt_GetFontVMetrics(&finfo, &asc, &desc, &gap);
     lh = text_lead > 0 ? text_lead : (LONG)((asc - desc + gap) * scale + 0.5f);
+    /* gedreht: erst Umriss messen, dann ungedreht in den Deckungspuffer, dann drehen */
+    for (pass = tx_xf ? 0 : 1; pass < 2; pass++) {
+    measuring = pass == 0;
+    if (pass == 1 && tx_xf) {
+        if (cov)
+            FreeVec(cov);
+        cov_x0 = tx_bx0 - 2;
+        cov_y0 = tx_by0 - 2;
+        cov_w = tx_bx1 - tx_bx0 + 4;
+        cov_h = tx_by1 - tx_by0 + 4;
+        if (cov_w <= 4 || cov_h <= 4 || cov_w * cov_h > 16 * 1024 * 1024 ||
+            !(cov = AllocVec(cov_w * cov_h, MEMF_ANY | MEMF_CLEAR))) {
+            cov = NULL;
+            cov_w = cov_h = 0;
+        }
+    }
+    tx_bx0 = tx_by0 = 0x7FFFFFFF;
+    tx_bx1 = tx_by1 = -0x7FFFFFFF;
+    s = (const UBYTE *)tx_buf;
     /* Punkttext: Anker = Grundlinie; Absatztext: Anker = Rahmen oben links */
     pen_y = tx_boxw > 0 ? tx_y + (LONG)(asc * scale + 0.5f) : tx_y;
     pen_x = (float)tx_x;
@@ -360,12 +495,12 @@ static void render(void)
                     gsize = w * h;
                     gbuf = AllocVec(gsize, MEMF_ANY);
                 }
-                if (gbuf) {
+                if (gbuf && !measuring) {
                     stbtt_MakeCodepointBitmapSubpixel(&finfo, gbuf, w, h, w, scale, scale,
                                                       pen_x - floorf(pen_x), 0.0f, cp);
                     for (gy = 0; gy < h; gy++)
                         for (gx = 0; gx < w; gx++)
-                            put(px0 + x0 + gx, pen_y + y0 + gy, gbuf[gy * w + gx]);
+                            plot(px0 + x0 + gx, pen_y + y0 + gy, gbuf[gy * w + gx]);
                 }
             }
             pen_x += adv * scale;
@@ -381,6 +516,13 @@ static void render(void)
         if (tx_y < tx_by0) tx_by0 = tx_y;
         if (tx_x + tx_boxw > tx_bx1) tx_bx1 = tx_x + tx_boxw;
         if (tx_y + tx_boxh > tx_by1) tx_by1 = tx_y + tx_boxh;
+    }
+    }                           /* Durchgaenge */
+    measuring = FALSE;
+    if (tx_xf && cov) {
+        stamp_transformed();
+        FreeVec(cov);
+        cov = NULL;
     }
     if (gbuf)
         FreeVec(gbuf);
@@ -398,6 +540,22 @@ static void render(void)
 /* Schreibmarke als Overlay */
 static void text_overlay(void)
 {
+    if (tx_xf) {                /* gedreht: Rahmen und Schreibmarke als Linien */
+        LONG ax, ay, bx, by, k;
+        if (tx_boxw > 0) {
+            static const BYTE cx[5] = { 0, 1, 1, 0, 0 }, cy[5] = { 0, 0, 1, 1, 0 };
+            for (k = 0; k < 4; k++) {
+                scr_point((float)(tx_x + cx[k] * tx_boxw), (float)(tx_y + cy[k] * tx_boxh), &ax, &ay);
+                scr_point((float)(tx_x + cx[k + 1] * tx_boxw), (float)(tx_y + cy[k + 1] * tx_boxh), &bx, &by);
+                line(ax, ay, bx, by, 0xFFFFFFFF);
+            }
+        }
+        scr_point((float)car_x, (float)car_y0, &ax, &ay);
+        scr_point((float)car_x, (float)car_y1, &bx, &by);
+        line(ax, ay, bx, by, 0xFF000000);
+        line(ax + 1, ay, bx + 1, by, 0xFFFFFFFF);
+        return;
+    }
     if (tx_boxw > 0) {
         LONG x0 = doc2scrx((float)tx_x), y0 = doc2scry((float)tx_y);
         LONG x1 = doc2scrx((float)(tx_x + tx_boxw)), y1 = doc2scry((float)(tx_y + tx_boxh));
@@ -435,6 +593,7 @@ BOOL text_begin(LONG x, LONG y)
     tx_x = x;
     tx_y = y;
     tx_boxw = tx_boxh = 0;
+    set_matrix(NULL);
     tx_on = TRUE;
     tx_editing = FALSE;
     tx_saved = FALSE;
@@ -475,6 +634,7 @@ BOOL text_begin_edit(Layer *l)
     tx_y = l->text->y;
     tx_boxw = l->text->boxw;
     tx_boxh = l->text->boxh;
+    set_matrix(l->text->m);
     text_size = l->text->size;
     fg_color = l->text->color;
     text_align = l->text->align;
@@ -526,9 +686,11 @@ static void drop_layer(void)
 static void end_session(void)
 {
     view_inval(cv_x0, cv_y0, cv_x1, cv_y1);
-    if (tx_boxw > 0)            /* Rahmen wegraeumen */
-        view_inval(doc2scrx((float)tx_x) - 2, doc2scry((float)tx_y) - 2,
-                   doc2scrx((float)(tx_x + tx_boxw)) + 3, doc2scry((float)(tx_y + tx_boxh)) + 3);
+    if (tx_boxw > 0) {          /* Rahmen wegraeumen */
+        LONG a, b, c, d;
+        scr_box((float)tx_x, (float)tx_y, (float)(tx_x + tx_boxw), (float)(tx_y + tx_boxh), 2, &a, &b, &c, &d);
+        view_inval(a, b, c, d);
+    }
     view_text_overlay = NULL;
     tx_on = FALSE;
     tx_editing = FALSE;
@@ -538,6 +700,7 @@ static void end_session(void)
 
 void text_commit(void)
 {
+    LONG k;
     if (!tx_on)
         return;
     if (!tx_buf[0] && !tx_editing) {
@@ -564,6 +727,8 @@ void text_commit(void)
         t->leading = text_lead;
         t->bx0 = tx_bx0; t->by0 = tx_by0;
         t->bx1 = tx_bx1; t->by1 = tx_by1;
+        for (k = 0; k < 4; k++)
+            t->m[k] = tx_xf ? (LONG)floorf(tx_m[k] * 65536.0f + 0.5f) : 0;
     }
     {
         /* Ebenenname = Anfang des Textes (erste Zeile) */

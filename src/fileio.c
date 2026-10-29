@@ -54,6 +54,7 @@ struct Library *DataTypesBase;
 #define TAG_QPAL 0x5150414C /* "QPAL": Palette der letzten Farbreduktion */
 #define TAG_FPAL 0x4650414C /* "FPAL": vorgegebene Palette (Fixed) */
 #define TAG_ALVL 0x414C564C /* "ALVL": Levels je Kanal einer Korrekturebene: LONG lv[3][5] */
+#define TAG_TMAT 0x544D4154 /* "TMAT": Transformation einer Textebene: LONG m[4] (16.16) */
 #define TAG_GENI 0x47454E49 /* "GENI": generative Ebene: ULONG mode, Prompt (UTF-8, 0-terminiert) */
 
 /* Kachel -> 4 Kanalebenen mit Differenzfilter */
@@ -270,7 +271,10 @@ static BOOL write_chunks(BPTR fh, Doc *d, Layer *l)
         if (!ok)
             return FALSE;
     }
-    if (l->text && (!wr32(fh, TAG_TEXT) || !wr32(fh, sizeof(TextInfo)) || !wr(fh, l->text, sizeof(TextInfo))))
+    if (l->text && (!wr32(fh, TAG_TEXT) || !wr32(fh, TEXTINFO_V3) || !wr(fh, l->text, TEXTINFO_V3)))
+        return FALSE;
+    if (l->text && (l->text->m[0] || l->text->m[1] || l->text->m[2] || l->text->m[3]) &&
+        (!wr32(fh, TAG_TMAT) || !wr32(fh, 16) || !wr(fh, l->text->m, 16)))
         return FALSE;
     if (l->movf) {
         Ovf *o = l->movf;
@@ -433,7 +437,10 @@ static BOOL read_chunks(BPTR fh, Doc *d, Layer *l, char *err)
                     break;
             } else
                 Seek(fh, len, OFFSET_CURRENT);
-        } else if (tag == TAG_TEXT && (len == sizeof(TextInfo) || len == TEXTINFO_V1 || len == TEXTINFO_V2)) {
+        } else if (tag == TAG_TMAT && len == 16 && l->text) {
+            if (!rd(fh, l->text->m, 16))
+                break;
+        } else if (tag == TAG_TEXT && (len == TEXTINFO_V3 || len == TEXTINFO_V1 || len == TEXTINFO_V2)) {
             if ((l->text = AllocVec(sizeof(TextInfo), MEMF_ANY | MEMF_CLEAR))) {
                 if (!rd(fh, l->text, len))
                     break;

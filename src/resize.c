@@ -283,11 +283,47 @@ static Doc *build(Doc *s, LONG nw, LONG nh, BOOL scale, LONG ox, LONG oy)
             l->fx->st_size = (LONG)(l->fx->st_size * k + 0.5f);
             if (l->fx->st_size < 1) l->fx->st_size = 1;
         }
-        /* Text bleibt editierbar (gedreht: wird zu Pixeln) */
-        if (sl->text && !rot_on && (l->text = AllocVec(sizeof(TextInfo), MEMF_ANY))) {
+        /* Text bleibt editierbar; gedreht/gespiegelt: Anker und Matrix mitnehmen */
+        if (sl->text && (l->text = AllocVec(sizeof(TextInfo), MEMF_ANY))) {
             TextInfo *t = l->text;
             *t = *sl->text;
-            if (scale) {
+            if (rot_on) {
+                /* vorwaerts (Quelle -> Ziel) = F * R, R = (c -s; s c), F = Spiegelung */
+                float fx = rot_fh ? -1.0f : 1.0f, fy = rot_fv ? -1.0f : 1.0f;
+                float L[4], M[4], bx[4], by[4];
+                LONG k;
+                L[0] = fx * rot_c; L[1] = -fx * rot_s; L[2] = fy * rot_s; L[3] = fy * rot_c;
+                if (t->m[0] || t->m[1] || t->m[2] || t->m[3])
+                    for (k = 0; k < 4; k++)
+                        M[k] = t->m[k] / 65536.0f;
+                else {
+                    M[0] = M[3] = 1.0f;
+                    M[1] = M[2] = 0.0f;
+                }
+                t->m[0] = (LONG)floorf((L[0] * M[0] + L[1] * M[2]) * 65536.0f + 0.5f);
+                t->m[1] = (LONG)floorf((L[0] * M[1] + L[1] * M[3]) * 65536.0f + 0.5f);
+                t->m[2] = (LONG)floorf((L[2] * M[0] + L[3] * M[2]) * 65536.0f + 0.5f);
+                t->m[3] = (LONG)floorf((L[2] * M[1] + L[3] * M[3]) * 65536.0f + 0.5f);
+                /* Anker und Umriss (Ecken) mitnehmen */
+                {
+                    float dx = sl->text->x - s->w * 0.5f, dy = sl->text->y - s->h * 0.5f;
+                    t->x = (LONG)floorf(nw * 0.5f + L[0] * dx + L[1] * dy + 0.5f);
+                    t->y = (LONG)floorf(nh * 0.5f + L[2] * dx + L[3] * dy + 0.5f);
+                }
+                bx[0] = bx[2] = (float)sl->text->bx0; bx[1] = bx[3] = (float)sl->text->bx1;
+                by[0] = by[1] = (float)sl->text->by0; by[2] = by[3] = (float)sl->text->by1;
+                t->bx0 = t->by0 = 0x7FFFFFFF;
+                t->bx1 = t->by1 = -0x7FFFFFFF;
+                for (k = 0; k < 4; k++) {
+                    float dx = bx[k] - s->w * 0.5f, dy = by[k] - s->h * 0.5f;
+                    LONG X = (LONG)floorf(nw * 0.5f + L[0] * dx + L[1] * dy + 0.5f);
+                    LONG Y = (LONG)floorf(nh * 0.5f + L[2] * dx + L[3] * dy + 0.5f);
+                    if (X < t->bx0) t->bx0 = X;
+                    if (X > t->bx1) t->bx1 = X;
+                    if (Y < t->by0) t->by0 = Y;
+                    if (Y > t->by1) t->by1 = Y;
+                }
+            } else if (scale) {
                 t->x = (LONG)(t->x * kx); t->y = (LONG)(t->y * ky);
                 t->size = (LONG)(t->size * (kx < ky ? kx : ky) + 0.5f);
                 if (t->size < 1) t->size = 1;
