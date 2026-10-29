@@ -271,6 +271,8 @@ static ULONG stripes(LONG x, LONG y)
     return ((x / 9) & 1) ? 0xFFF0F030 : 0x8000A0FF;
 }
 
+static char lt_prompt[200];
+
 void layer_test(const char *outdir)
 {
     char path[256], err[80];
@@ -304,6 +306,20 @@ void layer_test(const char *outdir)
         l->fx = fx;
         l->fx_valid = FALSE;
     }
+    /* generative Ebene: laengster Prompt (199 Zeichen) mit UTF-8-Umlauten */
+    {
+        GenInfo *g = AllocVec(sizeof(GenInfo), MEMF_ANY | MEMF_CLEAR);
+        if (g) {
+            LONG k;
+            strcpy(g->prompt, "Gr\xC3\xBCne Wiese mit Bl\xC3\xBCmchen, ");
+            for (k = strlen(g->prompt); k < 199; k++)
+                g->prompt[k] = 'a' + k % 26;
+            g->prompt[199] = 0;
+            g->mode = GEN_REMOVE;
+            l->gen = g;
+            strcpy(lt_prompt, g->prompt);
+        }
+    }
     doc_group_layers();
     doc->layers[doc->active]->mode = BM_SCREEN;
     doc->layers[doc->active]->pass = 0;     /* isoliert, damit der Modus der Gruppe wirkt */
@@ -326,6 +342,14 @@ void layer_test(const char *outdir)
         return;
     }
     Printf("%ld layers loaded\n", doc->nlayers);
+    {
+        LONG k, found = 0;
+        for (k = 0; k < doc->nlayers; k++)
+            if (doc->layers[k]->gen)
+                found = !strcmp(doc->layers[k]->gen->prompt, lt_prompt) &&
+                        doc->layers[k]->gen->mode == GEN_REMOVE ? 1 : -1;
+        PutStr(found == 1 ? "GENI ok\n" : found ? "GENI FAIL: prompt/mode differ\n" : "GENI FAIL: missing\n");
+    }
     doc_mark_all_dirty();
     doc_process_dirty();
     sprintf(path, "%s/after.png", outdir);
