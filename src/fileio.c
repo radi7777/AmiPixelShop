@@ -55,6 +55,7 @@ struct Library *DataTypesBase;
 #define TAG_FPAL 0x4650414C /* "FPAL": vorgegebene Palette (Fixed) */
 #define TAG_ALVL 0x414C564C /* "ALVL": Levels je Kanal einer Korrekturebene: LONG lv[3][5] */
 #define TAG_TMAT 0x544D4154 /* "TMAT": Transformation einer Textebene: LONG m[4] (16.16) */
+#define TAG_GUID 0x47554944 /* "GUID": Hilfslinien: n, dann n * (Lage, senkrecht) */
 #define TAG_GENI 0x47454E49 /* "GENI": generative Ebene: ULONG mode, Prompt (UTF-8, 0-terminiert) */
 
 /* Kachel -> 4 Kanalebenen mit Differenzfilter */
@@ -601,6 +602,17 @@ static Doc *load_aps(const char *path, char *err)
                         FreeVec(d->qpal);
                     d->qpal = q;
                 }
+            } else if (tag == TAG_GUID && len >= 4 && rd32(fh, &np)) {
+                for (i = 0; i < (LONG)np && (ULONG)(4 + i * 8 + 8) <= len; i++) {
+                    if (!rd(fh, v, 8))
+                        break;
+                    if (d->nguides < MAX_GUIDES) {
+                        d->guide[d->nguides] = (LONG)v[0];
+                        d->gvert[d->nguides++] = v[1] != 0;
+                    }
+                }
+                if (i < (LONG)np || (4 + np * 8 < len && Seek(fh, len - 4 - np * 8, OFFSET_CURRENT) < 0))
+                    break;
             } else if (Seek(fh, len, OFFSET_CURRENT) < 0)
                 break;              /* unbekannter Block: ueberspringen */
         }
@@ -705,6 +717,13 @@ static BOOL save_aps(Doc *d, const char *path, char *err)
     if ((d->qpal && !wr_qpal(fh, TAG_QPAL, d->qpal, d->qopt)) ||
         (d->fixpal && !wr_qpal(fh, TAG_FPAL, d->fixpal, NULL)))
         goto out;
+    if (d->nguides) {
+        if (!wr32(fh, TAG_GUID) || !wr32(fh, 4 + d->nguides * 8) || !wr32(fh, d->nguides))
+            goto out;
+        for (i = 0; i < d->nguides; i++)
+            if (!wr32(fh, d->guide[i]) || !wr32(fh, d->gvert[i]))
+                goto out;
+    }
     ok = TRUE;
 out:
     if (present)

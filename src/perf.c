@@ -340,6 +340,10 @@ void layer_test(const char *outdir)
     sprintf(path, "%s/before.png", outdir);
     if (!file_save(doc, path, err)) Printf("save: %s\n", (ULONG)err);
     sprintf(path, "%s/t.aps", outdir);
+    doc->nguides = 3;           /* Hilfslinien muessen mitkommen */
+    doc->guide[0] = 10;  doc->gvert[0] = 1;
+    doc->guide[1] = -5;  doc->gvert[1] = 0;
+    doc->guide[2] = 999; doc->gvert[2] = 0;
     if (!file_save(doc, path, err)) Printf("save aps: %s\n", (ULONG)err);
     Printf("%ld layers saved\n", doc->nlayers);
     undo_clear();
@@ -357,6 +361,8 @@ void layer_test(const char *outdir)
                         doc->layers[k]->gen->mode == GEN_REMOVE ? 1 : -1;
         PutStr(found == 1 ? "GENI ok\n" : found ? "GENI FAIL: prompt/mode differ\n" : "GENI FAIL: missing\n");
     }
+    PutStr(doc->nguides == 3 && doc->guide[0] == 10 && doc->gvert[0] == 1 && doc->guide[1] == -5 &&
+           doc->gvert[1] == 0 && doc->guide[2] == 999 && doc->gvert[2] == 0 ? "GUID ok\n" : "GUID FAIL\n");
     doc_mark_all_dirty();
     doc_process_dirty();
     sprintf(path, "%s/after.png", outdir);

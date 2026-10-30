@@ -14,6 +14,7 @@
 typedef struct { UBYTE w, h; BYTE xo, yo; UBYTE adv; UWORD off; } Glyph;
 #include "font_ui.h"
 #include "font_bold.h"
+#include "font_small.h"
 
 extern struct Library *P96Base;
 extern struct Device *TimerBase;
@@ -188,6 +189,20 @@ LONG text(LONG x, LONG y, const char *s, ULONG c)
 LONG text_bold(LONG x, LONG y, const char *s, ULONG c)
 {
     return draw_text(x, y, s, c, fbold_glyphs, fbold_alpha);
+}
+
+LONG text_small(LONG x, LONG y, const char *s, ULONG c)
+{
+    return draw_text(x, y, s, c, fsm_glyphs, fsm_alpha);
+}
+
+LONG text_small_width(const char *str)
+{
+    const UBYTE *s = (const UBYTE *)str;
+    LONG w = 0;
+    while (*s)
+        w += fsm_glyphs[next_char(&s)].adv;
+    return w;
 }
 
 LONG text_width(const char *str)

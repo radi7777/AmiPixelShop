@@ -143,6 +143,8 @@ typedef struct Path {
     PathPt pt[PATH_MAXPTS];
 } Path;
 
+#define MAX_GUIDES 64
+
 typedef struct Doc {
     LONG w, h, tw, th;
     Layer *layers[MAX_LAYERS];  /* [0] = unterste */
@@ -181,6 +183,9 @@ typedef struct Doc {
     ULONG *bcache;              /* Komposit der Ebenen 0..bcache_upto-1 (waehrend Ziehen/Vorschau) */
     UBYTE *bstate;
     LONG bcache_upto;
+    LONG nguides;               /* Hilfslinien: Lage in Dokumentpixeln */
+    LONG guide[MAX_GUIDES];
+    UBYTE gvert[MAX_GUIDES];    /* 1 = senkrecht (x), 0 = waagerecht (y) */
 } Doc;
 
 extern Doc *doc;                /* aktives Dokument */
@@ -229,6 +234,8 @@ void circle(LONG cx, LONG cy, LONG r, ULONG c);
 LONG text(LONG x, LONG y, const char *s, ULONG c);
 LONG text_bold(LONG x, LONG y, const char *s, ULONG c);
 LONG text_width(const char *s);
+LONG text_small(LONG x, LONG y, const char *s, ULONG c);   /* 9 px, fuer Lineale */
+LONG text_small_width(const char *s);
 void icon(LONG x, LONG y, LONG id, ULONG c);
 void blit(LONG x, LONG y, LONG w, LONG h);
 ULONG now_us(void);
@@ -364,6 +371,8 @@ void doc_fill_selection(ULONG color, BOOL clear);
 extern float zoom;
 extern LONG ox, oy;
 extern LONG cvx, cvy, cvw, cvh;
+extern LONG cax, caw;           /* Bereich zwischen Werkzeugleiste und Panels (mit Linealen) */
+void view_layout(void);
 void view_init(void);
 void view_free(void);
 void view_fit(void);
@@ -694,6 +703,7 @@ enum {
     CMD_FLT_LIQUIFY, CMD_LQ_APPLY, CMD_LQ_CANCEL, CMD_EXPORT_IFF,
     CMD_PAL_LOAD, CMD_PAL_SAVE, CMD_PAL_FIX, CMD_GEN_FILL, CMD_GEN_REMOVE, CMD_SEL_SUBJECT, CMD_REMOVE_BG, CMD_TASKBAR,
     CMD_AI_SETTINGS, CMD_AI_KEY, CMD_GEN_AGAIN, CMD_GEN_PREV, CMD_GEN_NEXT, CMD_UPD_CHECK, CMD_UPD_AUTO,
+    CMD_RULERS, CMD_GUIDES_SHOW, CMD_GUIDES_LOCK, CMD_GUIDES_SNAP, CMD_GUIDES_CLEAR, CMD_GUIDE_NEW,
     CMD_GROUP_NEW, CMD_GROUP, CMD_UNGROUP, CMD_MERGE_GROUP, CMD_ADJ_EDIT,
     CMD_NADJ_BRICON, CMD_NADJ_LEVELS, CMD_NADJ_CURVES, CMD_NADJ_HUESAT, CMD_NADJ_DESAT,
     CMD_NADJ_INVERT, CMD_NADJ_THRESH, CMD_NADJ_POSTER, CMD_FLIP_H, CMD_FLIP_V, CMD_ROT180, CMD_ROT90CW, CMD_ROT90CCW,
@@ -704,6 +714,25 @@ enum {
     CMD_FLT_MOTION, CMD_FLT_BOX, CMD_FLT_MEDIAN, CMD_FLT_SHARPEN, CMD_FLT_SHARPEN_MORE,
     CMD_FLT_HIGHPASS, CMD_FLT_EDGES, CMD_FLT_QUANT, CMD_FLT_LAST
 };
+
+/* ---- Lineale und Hilfslinien (guides.c) ---- */
+#define RULER_SZ 16
+extern BOOL rulers_on, guides_show, guides_lock, guides_snap;
+void rulers_set(BOOL on);
+void rulers_draw(void);
+void rulers_mark(LONG x, LONG y);            /* Mausposition in den Linealen */
+BOOL guides_ruler_down(LONG x, LONG y);      /* Ziehen aus dem Lineal: neue Linie */
+BOOL guides_grab(LONG x, LONG y);            /* vorhandene Linie greifen */
+BOOL guides_dragging(void);
+void guides_drag_move(LONG x, LONG y);
+void guides_drag_end(LONG x, LONG y);
+LONG guides_at(LONG x, LONG y);              /* Linie unter dem Zeiger oder -1 */
+void guides_overlay(void);
+void guides_changed(void);
+void guides_add(LONG pos, BOOL vert);
+void guides_clear(void);
+void guides_snap_pt(float *x, float *y);     /* Dokumentkoordinaten an Linien/Rand */
+void guides_snap_scr(LONG *x, LONG *y);      /* dasselbe in Bildschirmkoordinaten */
 
 /* ---- Korrekturen und Filter (filter.c) ---- */
 void filter_command(LONG cmd);

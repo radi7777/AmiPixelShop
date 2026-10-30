@@ -116,6 +116,13 @@ static void update_cursor(void)
     update_pointer();
 }
 
+/* Ansichtsbefehle: schliessen Text/Transformation/Verfluessigen nicht ab */
+static BOOL view_cmd(LONG c)
+{
+    return c == CMD_ZOOM_IN || c == CMD_ZOOM_OUT || c == CMD_ZOOM_FIT || c == CMD_ZOOM_100 ||
+           (c >= CMD_RULERS && c <= CMD_GUIDE_NEW);
+}
+
 static LONG mode_from_qual(UWORD qual)
 {
     BOOL sh = (qual & QUAL_SHIFT) != 0, al = (qual & QUAL_ALT) != 0;
@@ -346,6 +353,11 @@ static void mouse_down(UWORD qual, ULONG secs, ULONG mics)
         return;
     }
 
+    /* Hilfslinie greifen: Verschieben-Werkzeug oder Strg (wie Photoshop) */
+    if ((t == T_MOVE || ((qual & QUAL_CMD) && t != T_HAND && t != T_ZOOM && t != T_PEN)) &&
+        guides_grab(mouse_x, mouse_y))
+        return;
+
     switch (t) {
     case T_BRUSH: case T_ERASER: case T_CLONE: case T_BLUR: case T_DODGE: case T_GRADIENT: case T_BUCKET:
     case T_HISTBRUSH: case T_HEAL:
@@ -412,6 +424,7 @@ static void mouse_down(UWORD qual, ULONG secs, ULONG mics)
         painting = TRUE;
         break;
     case T_SHAPE:
+        guides_snap_pt(&dx, &dy);
         shp_x0 = shp_x1 = dx;
         shp_y0 = shp_y1 = dy;
         tf_shift = (qual & QUAL_SHIFT) != 0;
@@ -419,6 +432,7 @@ static void mouse_down(UWORD qual, ULONG secs, ULONG mics)
         shape_preview();
         break;
     case T_CROP:
+        guides_snap_scr(&mouse_x, &mouse_y);
         crop_mouse_down(mouse_x, mouse_y);
         cropping = TRUE;
         break;
@@ -445,6 +459,7 @@ static void mouse_down(UWORD qual, ULONG secs, ULONG mics)
     case T_RECT:
     case T_ELLIPSE:
         drag_mode = mode_from_qual(qual);
+        guides_snap_pt(&dx, &dy);
         mq_x0 = dx;
         mq_y0 = dy;
         marquee_drag = TRUE;
@@ -557,6 +572,11 @@ static void mouse_move(void)
 {
     float dx = scr2docx(mouse_x), dy = scr2docy(mouse_y);
 
+    rulers_mark(mouse_x, mouse_y);
+    if (guides_dragging()) {
+        guides_drag_move(mouse_x, mouse_y);
+        return;
+    }
     if (!painting && !moving && !panning)
         ui_hover(mouse_x, mouse_y);
 
@@ -601,6 +621,7 @@ static void mouse_move(void)
             selection_changed();
         }
     } else if (shaping) {
+        guides_snap_pt(&dx, &dy);
         shape_end_point(dx, dy);
         shape_preview();
     } else if (texting) {
@@ -608,14 +629,18 @@ static void mouse_move(void)
     } else if (penning) {
         path_mouse_move(mouse_x, mouse_y);
     } else if (cropping) {
-        crop_mouse_move(mouse_x, mouse_y);
+        LONG cx = mouse_x, cy = mouse_y;
+        guides_snap_scr(&cx, &cy);
+        crop_mouse_move(cx, cy);
         ui_draw_options();
     } else if (grad_drag) {
         path_n = 1;
         add_path_point(dx, dy);
         view_path_changed();
-    } else if (marquee_drag)
+    } else if (marquee_drag) {
+        guides_snap_pt(&dx, &dy);
         marquee_preview(dx, dy);
+    }
     else if (mag_active())
         mag_move(dx, dy);
     else if (poly_active) {
@@ -644,6 +669,10 @@ static void apply_move(void)
  * Zwischenpositionen verloren - die letzte darf es nicht. */
 static void mouse_up(void)
 {
+    if (guides_dragging()) {
+        guides_drag_end(mouse_x, mouse_y);
+        return;
+    }
     if (ui_dragging()) {
         ui_mouse_move(mouse_x, mouse_y);
         ui_mouse_up();
@@ -692,7 +721,9 @@ static void mouse_up(void)
         selection_changed();
     }
     if (shaping) {
-        shape_end_point(scr2docx(mouse_x), scr2docy(mouse_y));
+        float ex = scr2docx(mouse_x), ey = scr2docy(mouse_y);
+        guides_snap_pt(&ex, &ey);
+        shape_end_point(ex, ey);
         shaping = FALSE;
         path_closed_preview = FALSE;
         cancel_path();
@@ -724,7 +755,9 @@ static void mouse_up(void)
         ui_draw_panels();     /* Miniatur und Protokoll */
     }
     if (cropping) {
-        crop_mouse_up(mouse_x, mouse_y);
+        LONG cx = mouse_x, cy = mouse_y;
+        guides_snap_scr(&cx, &cy);
+        crop_mouse_up(cx, cy);
         cropping = FALSE;
         ui_draw_options();
     }
@@ -751,7 +784,9 @@ static void mouse_up(void)
     }
     if (marquee_drag) {
         float dx = scr2docx(mouse_x), dy = scr2docy(mouse_y);
-        BOOL moved = fabsf(dx - mq_x0) * zoom > 2.0f || fabsf(dy - mq_y0) * zoom > 2.0f;
+        BOOL moved;
+        guides_snap_pt(&dx, &dy);
+        moved = fabsf(dx - mq_x0) * zoom > 2.0f || fabsf(dy - mq_y0) * zoom > 2.0f;
         if (moved) {
             if (tool == T_RECT)
                 sel_rect(mq_x0, mq_y0, dx, dy, drag_mode);
@@ -981,6 +1016,9 @@ static BOOL handle_key(UWORD code, UWORD qual)
         case '-': c = CMD_ZOOM_OUT; break;
         case '0': c = CMD_ZOOM_FIT; break;
         case '1': c = CMD_ZOOM_100; break;
+        case 'r': case 'R': c = CMD_RULERS; break;
+        case ';': c = CMD_GUIDES_SHOW; break;
+        case ':': c = CMD_GUIDES_SNAP; break;
         }
         if (c != CMD_NONE)
             do_command(c);
@@ -1318,13 +1356,13 @@ void do_command(LONG c)
 
     /* andere Befehle schliessen einen offenen Text ab */
     if (text_active() && c != CMD_TEXT_COMMIT && c != CMD_TEXT_CANCEL &&
-        c != CMD_ZOOM_IN && c != CMD_ZOOM_OUT && c != CMD_ZOOM_FIT && c != CMD_ZOOM_100 &&
+        !view_cmd(c) &&
         !(c >= CMD_TYPE_CHAR && c <= CMD_LOREM)) {   /* Textbefehle wirken im laufenden Text */
         text_commit();
         ui_draw_options();
     }
     if (liquify_active() && c != CMD_LQ_APPLY && c != CMD_LQ_CANCEL && c != CMD_FLT_LIQUIFY &&
-        c != CMD_ZOOM_IN && c != CMD_ZOOM_OUT && c != CMD_ZOOM_FIT && c != CMD_ZOOM_100) {
+        !view_cmd(c)) {
         lq_dragging = FALSE;
         liquify_apply();
         ui_draw_options();
@@ -1332,7 +1370,7 @@ void do_command(LONG c)
     /* andere Bearbeitungen schliessen eine offene Transformation ab */
     if (transform_active() && c != CMD_TF_APPLY && c != CMD_TF_CANCEL && c != CMD_FREE_TF &&
         !(c >= CMD_TF_FREE && c <= CMD_TF_WARP) &&
-        c != CMD_ZOOM_IN && c != CMD_ZOOM_OUT && c != CMD_ZOOM_FIT && c != CMD_ZOOM_100) {
+        !view_cmd(c)) {
         tf_dragging = tf_pending = FALSE;
         transform_apply();
         ui_draw_options();
@@ -2120,6 +2158,43 @@ void do_command(LONG c)
     case CMD_ZOOM_100:
         view_set_zoom(1.0f, cvx + cvw / 2, cvy + cvh / 2);
         break;
+    case CMD_RULERS:
+        rulers_set(!rulers_on);
+        ui_prefs_save();
+        break;
+    case CMD_GUIDES_SHOW:
+        guides_show = !guides_show;
+        guides_changed();
+        break;
+    case CMD_GUIDES_SNAP:
+        guides_snap = !guides_snap;
+        ui_prefs_save();
+        status_message(guides_snap ? "Snap on" : "Snap off");
+        break;
+    case CMD_GUIDES_LOCK:
+        guides_lock = !guides_lock;
+        break;
+    case CMD_GUIDES_CLEAR:
+        guides_clear();
+        ui_draw_tab();
+        break;
+    case CMD_GUIDE_NEW: {
+        static LONG orient, pos;
+        DlgSlider sl[2] = {
+            { "Orientation:", &orient, DLG_CHOICE, DLG_CHOICE, "Horizontal|Vertical", 1 },
+            { "Position:", &pos, 0, 0, "px", 1 } };
+        sl[1].max = doc->w > doc->h ? doc->w : doc->h;
+        if (pos > sl[1].max)
+            pos = sl[1].max;
+        if (dialog_run("New Guide", sl, 2, NULL)) {
+            if (!guides_show) {
+                guides_show = TRUE;
+                guides_changed();
+            }
+            guides_add(pos, orient == 1);
+            ui_draw_tab();
+        }
+        break; }
     case CMD_ADJ_BRICON: case CMD_ADJ_LEVELS: case CMD_ADJ_HUESAT: case CMD_ADJ_DESAT:
     case CMD_ADJ_INVERT: case CMD_ADJ_THRESH: case CMD_ADJ_POSTER: case CMD_ADJ_CURVES:
     case CMD_FLT_GAUSS: case CMD_FLT_UNSHARP: case CMD_FLT_NOISE: case CMD_FLT_EMBOSS:
@@ -2543,6 +2618,10 @@ static int app_main(int argc, char **argv)
         }
     }
     ui_prefs_load();
+    if (rulers_on) {
+        view_layout();
+        view_fit();
+    }
     if (pref_mode != INVALID_ID)
         ui_prefs_save();        /* gerade gewaehlten Modus festhalten */
     brush_rebuild();

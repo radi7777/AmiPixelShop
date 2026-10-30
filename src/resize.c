@@ -337,6 +337,30 @@ static Doc *build(Doc *s, LONG nw, LONG nh, BOOL scale, LONG ox, LONG oy)
         }
     }
     FreeVec(dst);
+    /* Hilfslinien mitnehmen (schraeg gedreht entfallen sie) */
+    for (i = 0; i < s->nguides; i++) {
+        LONG g = s->guide[i];
+        BOOL vert = s->gvert[i];
+        if (rot_on) {
+            float u, v, x, y;
+            if (!rot_exact)
+                continue;
+            u = vert ? g - s->w * 0.5f : 0.0f;
+            v = vert ? 0.0f : g - s->h * 0.5f;
+            x = rot_c * u - rot_s * v;
+            y = rot_s * u + rot_c * v;
+            if (rot_fh) x = -x;
+            if (rot_fv) y = -y;
+            if (fabsf(rot_s) > 0.5f)
+                vert = !vert;
+            g = (LONG)floorf((vert ? x + nw * 0.5f : y + nh * 0.5f) + 0.5f);
+        } else if (scale)
+            g = (LONG)floorf(g * (vert ? kx : ky) + 0.5f);
+        else
+            g += vert ? ox : oy;
+        d->guide[d->nguides] = g;
+        d->gvert[d->nguides++] = vert;
+    }
     d->active = s->active < d->nlayers ? s->active : d->nlayers - 1;
     d->layer_counter = s->layer_counter;
     strcpy(d->path, s->path);

@@ -15,6 +15,7 @@
 float zoom = 1.0f;
 LONG ox, oy;                    /* Bildschirmposition von Dokument (0,0) */
 LONG cvx, cvy, cvw, cvh;        /* Canvas-Bereich auf dem Schirm */
+LONG cax, caw;                  /* derselbe Bereich samt Linealen */
 ULONG last_flush_us;
 void (*view_overlay_cb)(void);
 void (*view_transform_overlay)(void);
@@ -64,15 +65,27 @@ void view_free(void)
     ymap = NULL;
 }
 
+static void layout(void)
+{
+    LONG r = rulers_on ? RULER_SZ : 0;
+    cax = TOOL_W;
+    caw = SW - TOOL_W - PANEL_W;
+    cvx = cax + r;
+    cvy = MENU_H + OPT_H + TAB_H + r;
+    cvw = caw - r;
+    cvh = SH - MENU_H - OPT_H - TAB_H - STATUS_H - r;
+}
+
 void view_init(void)
 {
-    cvx = TOOL_W;
-    cvy = MENU_H + OPT_H + TAB_H;
-    cvw = SW - TOOL_W - PANEL_W;
-    cvh = SH - cvy - STATUS_H;
+    BOOL r = rulers_on;
+    rulers_on = FALSE;          /* Tabellen fuer die volle Groesse */
+    layout();
+    rulers_on = r;
     xmap = AllocVec(cvw * sizeof(LONG), MEMF_ANY);
     xrunend = AllocVec(cvw * sizeof(LONG), MEMF_ANY);
     ymap = AllocVec(cvh * sizeof(LONG), MEMF_ANY);
+    layout();
     ix0 = iy0 = 0x7FFFFFFF;
     ix1 = iy1 = -0x7FFFFFFF;
     pbx1 = pbx0 = 0;
@@ -213,6 +226,7 @@ static void overlays(LONG x0, LONG y0, LONG x1, LONG y1)
 {
     LONG i;
     gfx_clip(x0, y0, x1, y1);
+    guides_overlay();
     for (i = 0; i < nants; i++) {
         LONG x = ants[i] >> 16, y = ants[i] & 0xFFFF;
         pset(x, y, ANT_COL(x, y));
@@ -264,6 +278,15 @@ static void view_changed(void)
     view_ants_rebuild();
     view_inval_all();
     ui_draw_tab();
+    rulers_draw();
+}
+
+/* Lineale ein/aus: Ansicht neu einteilen, Dokument bleibt an seiner Stelle */
+void view_layout(void)
+{
+    layout();
+    if (doc)
+        view_changed();
 }
 
 void view_set_zoom(float z, LONG mx, LONG my)

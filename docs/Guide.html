@@ -149,9 +149,17 @@ Below the tools: foreground and background color - click to open the Color Picke
 <tr><td valign="top" bgcolor="#1e1e1e"><b>Task bar</b></td><td>Floating bar below the image with the <a href="#aibar">AI functions</a>.
 Hide it with <b>Window &gt; Contextual Task Bar</b>.</td></tr>
 <tr><td valign="top" bgcolor="#1e1e1e"><b>Status bar</b></td><td>Zoom (click to type a value), document size, redraw time and messages.</td></tr>
+<tr><td valign="top" bgcolor="#1e1e1e"><b>Rulers</b></td><td><b>View &gt; Rulers</b> (<tt>Ctrl+R</tt>) shows pixel rulers above and left of the image.</td></tr>
 </table>
 <p><b>Navigation</b>: hold <tt>Space</tt> and drag to scroll; mouse wheel or <tt>Ctrl++</tt> / <tt>Ctrl+-</tt> to zoom;
 <tt>Ctrl+0</tt> fits the image, <tt>Ctrl+1</tt> shows 100%.</p>
+<p><b>Guides</b>: drag from the top ruler for a horizontal guide, from the left ruler for a vertical one.
+<b>View &gt; New Guide...</b> places one at an exact position. To move a guide, drag it with the Move tool
+(or hold <tt>Ctrl</tt> with most other tools); drag it out of the image area (e.g. back onto the ruler) to delete it.
+Rectangle and Ellipse Marquee, Shapes and Crop snap to guides and to the image edges (<b>View &gt; Snap</b>).
+<b>View &gt; Show Guides</b> (<tt>Ctrl+;</tt>) hides them, <b>Lock Guides</b> stops them from moving,
+<b>Clear Guides</b> removes all. Guides are saved in <tt>.aps</tt> files and follow Image Size, Canvas Size,
+Crop and 90&deg;/180&deg; rotations; they are not part of Undo.</p>
 </td>
 </tr>
 </table>
@@ -664,13 +672,15 @@ Text and smart objects come in as pixels. Files too large for the memory open fl
 <tr><td>Ctrl+F</td><td>Last filter</td><td>Ctrl+Tab</td><td>Next document</td></tr>
 <tr><td>Shift+Ctrl+X</td><td>Liquify</td><td>X / D</td><td>Swap / reset colors</td></tr>
 <tr><td>Alt+Ctrl+I / C</td><td>Image Size / Canvas Size</td><td>, / .</td><td>Brush smaller / larger</td></tr>
+<tr><td></td><td></td><td>Ctrl+R</td><td>Rulers on / off</td></tr>
+<tr><td></td><td></td><td>Ctrl+; / Shift+Ctrl+;</td><td>Show guides / Snap</td></tr>
 </table>
 
 <hr>
 <a name="prefs"></a>
 <h2>25. Settings files</h2>
 <table border="1" cellpadding="4" cellspacing="0" bordercolor="#444444">
-<tr><td><tt>ENVARC:AmiPixelShop.prefs</tt></td><td>Screen mode, toolbar, New Document presets, task bar, AI and update settings.
+<tr><td><tt>ENVARC:AmiPixelShop.prefs</tt></td><td>Screen mode, toolbar, New Document presets, task bar, rulers, snap, AI and update settings.
 Delete it (and the copy in <tt>ENV:</tt>) to reset all settings.</td></tr>
 <tr><td><tt>ENVARC:AmiPixelShop/openrouter.key</tt></td><td>Your OpenRouter API key (set with <b>Edit &gt; AI API Key...</b>).</td></tr>
 </table>

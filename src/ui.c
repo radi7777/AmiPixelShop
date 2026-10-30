@@ -153,7 +153,11 @@ static const MenuItem m_filter[] = {
     SUB("Amiga", m_famiga), END };
 static const MenuItem m_view[] = {
     { "Zoom In", "Ctrl++", CMD_ZOOM_IN }, { "Zoom Out", "Ctrl+-", CMD_ZOOM_OUT }, SEP,
-    { "Fit on Screen", "Ctrl+0", CMD_ZOOM_FIT }, { "100%", "Ctrl+1", CMD_ZOOM_100 }, END };
+    { "Fit on Screen", "Ctrl+0", CMD_ZOOM_FIT }, { "100%", "Ctrl+1", CMD_ZOOM_100 }, SEP,
+    { "Rulers", "Ctrl+R", CMD_RULERS }, SEP,
+    { "Show Guides", "Ctrl+;", CMD_GUIDES_SHOW }, { "Snap", "Shift+Ctrl+;", CMD_GUIDES_SNAP },
+    { "Lock Guides", "", CMD_GUIDES_LOCK }, { "Clear Guides", "", CMD_GUIDES_CLEAR },
+    { "New Guide...", "", CMD_GUIDE_NEW }, END };
 static const MenuItem m_window[] = {
     { "Next Document", "Ctrl+Tab", CMD_NEXT_DOC }, SEP,
     { "Contextual Task Bar", "", CMD_TASKBAR }, END };
@@ -1425,6 +1429,8 @@ void ui_prefs_load(void)
     move_autogroup = strstr(buf, "autogroup=1") != NULL;
     ai_taskbar = strstr(buf, "taskbar=0") == NULL;
     upd_auto = strstr(buf, "updcheck=0") == NULL;
+    rulers_on = strstr(buf, "rulers=1") != NULL;
+    guides_snap = strstr(buf, "snap=0") == NULL;
     {
         char *q = strstr(buf, "updskip=");
         LONG k;
@@ -1466,7 +1472,8 @@ void ui_prefs_save(void)
             (long)move_autogroup, (long)ai_taskbar);
     sprintf(buf + strlen(buf), "aifill=%ld\naifast=%ld\naivar=%ld\n", (long)ai_fill_model,
             (long)ai_fast_model, (long)ai_variants);
-    sprintf(buf + strlen(buf), "updcheck=%ld\n", (long)upd_auto);
+    sprintf(buf + strlen(buf), "updcheck=%ld\nrulers=%ld\nsnap=%ld\n", (long)upd_auto, (long)rulers_on,
+            (long)guides_snap);
     if (upd_skip[0])
         sprintf(buf + strlen(buf), "updskip=%s\n", upd_skip);
     if (np_nrecent)
@@ -2619,10 +2626,10 @@ static LONG tabx[MAX_DOCS + 1];
 void ui_draw_tab(void)
 {
     char buf[128], z[16];
-    LONG y = MENU_H + OPT_H, x = cvx, i;
+    LONG y = MENU_H + OPT_H, x = cax, i;
     fmt_zoom(z, zoom);
-    fill(cvx, y, cvw, TAB_H, COL_PANELHD);
-    gfx_clip(cvx, y, cvx + cvw, y + TAB_H);
+    fill(cax, y, caw, TAB_H, COL_PANELHD);
+    gfx_clip(cax, y, cax + caw, y + TAB_H);
     for (i = 0; i < ndocs; i++) {
         Doc *d = docs[i];
         LONG w;
@@ -2647,8 +2654,8 @@ void ui_draw_tab(void)
     }
     tabx[ndocs] = x;
     gfx_noclip();
-    fill(cvx, y + TAB_H - 1, cvw, 1, COL_LINE);
-    blit(cvx, y, cvw, TAB_H);
+    fill(cax, y + TAB_H - 1, caw, 1, COL_LINE);
+    blit(cax, y, caw, TAB_H);
 }
 
 /* ---- Statusleiste ---- */
@@ -2665,15 +2672,15 @@ void ui_draw_status(void)
     if (!strcmp(buf, last))
         return;
     strcpy(last, buf);
-    fill(cvx, y, cvw, STATUS_H, COL_BAR);
-    fill(cvx, y, cvw, 1, COL_LINE);
+    fill(cax, y, caw, STATUS_H, COL_BAR);
+    fill(cax, y, caw, 1, COL_LINE);
     /* Zoom: Eingabefeld (Klick: Prozent eintippen) */
-    fill(cvx + 4, y + 3, 64, STATUS_H - 5, COL_FIELD);
-    frame(cvx + 4, y + 3, 64, STATUS_H - 5, COL_LINE);
-    text(cvx + 10, y + 3, z, COL_TEXT);
+    fill(cax + 4, y + 3, 64, STATUS_H - 5, COL_FIELD);
+    frame(cax + 4, y + 3, 64, STATUS_H - 5, COL_LINE);
+    text(cax + 10, y + 3, z, COL_TEXT);
     {
         char *p = buf + 1, *q;
-        x = cvx + 78;
+        x = cax + 78;
         while (p) {
             q = strchr(p, '|');
             if (q)
@@ -2684,7 +2691,7 @@ void ui_draw_status(void)
             p = q ? q + 1 : NULL;
         }
     }
-    blit(cvx, y, cvw, STATUS_H);
+    blit(cax, y, caw, STATUS_H);
 }
 
 void ui_draw_all(void)
@@ -2696,6 +2703,7 @@ void ui_draw_all(void)
     ui_draw_panels();
     ui_draw_tab();
     ui_draw_status();
+    rulers_draw();
 }
 
 void ui_set_tool(LONG t)
@@ -2736,6 +2744,8 @@ static BOOL cmd_enabled(LONG c)
         return doc->hassel;
     case CMD_RESELECT:
         return doc->lastsel != NULL;
+    case CMD_GUIDES_CLEAR:
+        return doc->nguides > 0;
     case CMD_REVERT:
         return doc->modified && doc->path[0];
     case CMD_MERGE_DOWN:
@@ -2831,7 +2841,9 @@ static void drop_draw(Drop *d)
             if (i == d->hover && en)
                 fill(d->x + 1, y, d->w - 2, 22, COL_ACCENT);
             text(d->x + 22, y + 2, it->label, c);
-            if ((it->cmd == CMD_TASKBAR && ai_taskbar) || (it->cmd == CMD_UPD_AUTO && upd_auto)) {   /* Haekchen */
+            if ((it->cmd == CMD_TASKBAR && ai_taskbar) || (it->cmd == CMD_UPD_AUTO && upd_auto) ||
+                (it->cmd == CMD_RULERS && rulers_on) || (it->cmd == CMD_GUIDES_SHOW && guides_show) ||
+                (it->cmd == CMD_GUIDES_SNAP && guides_snap) || (it->cmd == CMD_GUIDES_LOCK && guides_lock)) {   /* Haekchen */
                 line(d->x + 7, y + 11, d->x + 10, y + 14, c);
                 line(d->x + 10, y + 14, d->x + 15, y + 6, c);
             }
@@ -3023,12 +3035,12 @@ BOOL ui_mouse_down(LONG x, LONG y)
     tt_hide();
 
     /* Zoom-Feld in der Statusleiste */
-    if (menu_open < 0 && y >= SH - STATUS_H && x >= cvx + 4 && x < cvx + 68) {
+    if (menu_open < 0 && y >= SH - STATUS_H && x >= cax + 4 && x < cax + 68) {
         char buf[16];
         BOOL ok;
         LONG v;
         sprintf(buf, "%ld", (long)floorf(zoom * 100.0f + 0.5f));
-        if (ui_edit_text(cvx + 4, SH - STATUS_H + 2, 64, buf, sizeof(buf))) {
+        if (ui_edit_text(cax + 4, SH - STATUS_H + 2, 64, buf, sizeof(buf))) {
             v = parse_value(buf, 1, &ok);
             if (ok) {
                 if (v < 6) v = 6;
@@ -3530,7 +3542,7 @@ BOOL ui_mouse_down(LONG x, LONG y)
         return TRUE;
     }
 
-    if (y >= MENU_H + OPT_H && y < cvy) {
+    if (y >= MENU_H + OPT_H && y < MENU_H + OPT_H + TAB_H) {
         for (i = 0; i < ndocs; i++)
             if (x >= tabx[i] && x < tabx[i + 1]) {
                 Doc *d = docs[i];
@@ -3542,7 +3554,9 @@ BOOL ui_mouse_down(LONG x, LONG y)
             }
         return TRUE;
     }
-    if (y < cvy || y >= cvy + cvh)
+    if (guides_ruler_down(x, y))
+        return FALSE;           /* Ziehen uebernimmt main.c */
+    if (y < cvy || y >= cvy + cvh || x < cvx)
         return TRUE;
     return FALSE;
 }
