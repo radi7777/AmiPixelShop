@@ -11,6 +11,7 @@
 #include <proto/exec.h>
 #include <proto/dos.h>
 #include <proto/keymap.h>
+#include <proto/intuition.h>
 #include <math.h>
 #include "apx.h"
 
@@ -388,6 +389,8 @@ static void fmt_zoom(char *buf, float z)
 }
 
 /* ---- Menueleiste ---- */
+#define DEPTH_W 28              /* Tiefen-Gadget rechts: Bildschirm nach hinten */
+
 static void draw_menu(void)
 {
     LONG x = 34, i;
@@ -403,7 +406,27 @@ static void draw_menu(void)
         x = text(x, 2, menu_items[i], COL_TEXT) + 16;
     }
     title_x[i] = x - 8;
-    text(SW - text_width("AmiPixelShop") - 10, 2, "AmiPixelShop", COL_DIM);
+    text(SW - DEPTH_W - text_width("AmiPixelShop") - 10, 2, "AmiPixelShop", COL_DIM);
+    /* wie das Tiefen-Gadget einer Bildschirmleiste: hinteres Rechteck offen, vorderes gefuellt */
+    x = SW - DEPTH_W;
+    fill(x, 0, 1, MENU_H - 1, COL_LINE);
+    frame(x + 6, 4, 12, 9, COL_DIM);
+    fill(x + 11, 8, 12, 9, COL_DIM);
+    frame(x + 11, 8, 12, 9, COL_TEXT);
+}
+
+static void tt_hide(void);
+
+/* Klick auf das Tiefen-Gadget: naechster Bildschirm (Workbench usw.) nach vorn */
+static BOOL depth_gadget(LONG x, LONG y)
+{
+    if (y >= MENU_H || x < SW - DEPTH_W)
+        return FALSE;
+    if (menu_open >= 0)
+        ui_close_menu();
+    tt_hide();
+    ScreenToBack(scr);
+    return TRUE;
 }
 
 /* ---- Optionsleiste ---- */
@@ -1116,6 +1139,10 @@ static void tt_show(void)
         title = tool_names[tt_id];
         desc = tool_desc[tt_id];
         tt_y = tb_y[tt_id];
+    } else if (tt_id == -4) {
+        title = "Screen to Back";
+        desc = "Shows the next screen, e.g. the Workbench  (also Left-Amiga+M)";
+        tt_y = MENU_H + 2;
     } else if (tt_id == -2) {
         title = "More Tools";
         desc = "Tools hidden via Edit > Toolbar...";
@@ -1129,7 +1156,7 @@ static void tt_show(void)
     w2 = text_width(desc);
     tt_w = (w1 > w2 ? w1 : w2) + 20;
     tt_h = 44;
-    tt_x = TOOL_W + 4;
+    tt_x = tt_id == -4 ? SW - tt_w - 4 : TOOL_W + 4;
     if (tt_y + tt_h > SH)
         tt_y = SH - tt_h;
     if (!(tt_save = AllocVec(tt_w * tt_h * 4, MEMF_ANY)))
@@ -1158,6 +1185,8 @@ void ui_hover(LONG x, LONG y)
         if (id < 0 && y >= tb_colors_y - 2 && y < tb_colors_y + 30)
             id = -3;
     }
+    if (y < MENU_H && x >= SW - DEPTH_W && !ui_menu_open())
+        id = -4;
     if (id != tt_id) {
         tt_hide();
         tt_id = id;
@@ -3053,6 +3082,8 @@ BOOL ui_mouse_down(LONG x, LONG y)
         return TRUE;
     }
 
+    if (depth_gadget(x, y))
+        return TRUE;
     if (menu_open >= 0) {
         LONG m = menu_open, it;
         const MenuItem *sel = NULL;
