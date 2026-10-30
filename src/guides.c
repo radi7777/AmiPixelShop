@@ -109,7 +109,8 @@ static void ruler_left(void)
 void rulers_draw(void)
 {
     LONG y0 = cvy - RULER_SZ;
-    if (!rulers_on || !doc)
+    /* offenes Menue liegt darueber; beim Schliessen wird alles neu gezeichnet */
+    if (!rulers_on || !doc || ui_menu_open())
         return;
     fill(cax, y0, RULER_SZ, RULER_SZ, RULER_BG);     /* Ecke */
     fill(cax + RULER_SZ - 1, y0, 1, RULER_SZ, COL_LINE);
