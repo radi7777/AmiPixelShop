@@ -285,6 +285,11 @@ static void view_changed(void)
 void view_layout(void)
 {
     layout();
+    /* vorgemerkter Bereich stammt evtl. noch von der groesseren Flaeche */
+    if (ix0 < cvx) ix0 = cvx;
+    if (iy0 < cvy) iy0 = cvy;
+    if (ix1 > cvx + cvw) ix1 = cvx + cvw;
+    if (iy1 > cvy + cvh) iy1 = cvy + cvh;
     if (doc)
         view_changed();
 }
