@@ -44,8 +44,9 @@ Features
 - Undo/redo with history panel, multiple documents
 - Rulers and guides; selections, shapes, crop and the move tool snap
   to guides, image edges and layer edges
-- Built-in update: checks GitHub at start (when online), installs
-  new versions and restarts (can be turned off in the Help menu)
+- Built-in update: checks for a new version at start (when online),
+  installs it and restarts (can be turned off in the Help menu).
+  Update packages are signed - a damaged or forged package is refused
 - Reduce Colors: optimized palettes (24 bit, OCS 12 bit, MagicWB),
   2-256 colors, EHB, HAM6, HAM8, dithering, live preview
 - New Document presets for the classic Amiga screen modes
@@ -71,8 +72,8 @@ FONTS:truetype/.
 
 License
 -------
-MIT License. Uses stb (Public Domain/MIT), zlib (zlib License) and the
-Open Sans font (Apache License 2.0).
+MIT License. Uses stb (Public Domain/MIT), zlib (zlib License),
+TweetNaCl (Public Domain) and the Open Sans font (Apache License 2.0).
 
 Developed by a professional art designer with the help of Claude.
 

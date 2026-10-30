@@ -2217,6 +2217,7 @@ void do_command(LONG c)
                 "MIT License - github.com/radi7777/AmiPixelShop\n\n"
                 "stb_image, stb_image_write, stb_truetype: Sean Barrett (Public Domain / MIT)\n"
                 "zlib: Jean-loup Gailly, Mark Adler (zlib License)\n"
+                "TweetNaCl: D. J. Bernstein et al. (Public Domain)\n"
                 "UI font: Open Sans (Apache License 2.0)", "OK");
         break;
     }

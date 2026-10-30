@@ -95,7 +95,7 @@ Please open an [issue](https://github.com/radi7777/AmiPixelShop/issues) and incl
 AmiPixelShop is released under the [MIT License](LICENSE).
 
 Third-party code: [stb](https://github.com/nothings/stb) (stb_image, stb_image_write, stb_truetype -
-Public Domain / MIT) and [zlib](https://zlib.net) (zlib License). Interface font: Open Sans (Apache License 2.0).
+Public Domain / MIT), [zlib](https://zlib.net) (zlib License) and [TweetNaCl](https://tweetnacl.cr.yp.to) (Public Domain, update signatures). Interface font: Open Sans (Apache License 2.0).
 
 AmiPixelShop is an independent project and is not affiliated with any other software or vendor.
 All trademarks belong to their respective owners.
