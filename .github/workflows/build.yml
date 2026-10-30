@@ -1,0 +1,56 @@
+name: build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # bebbo's gcc 16 (amiga16.2), the toolchain the Makefile expects (m68k-amigaos-gcc-16.2).
+  # The toolchain is built once by tools/build-gcc16.sh (30-60 minutes) and cached;
+  # it is rebuilt only when that script changes.
+  gcc16:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - id: tc
+        run: echo "key=amiga-gcc16-$(sha256sum tools/build-gcc16.sh | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/amiga16
+          key: ${{ steps.tc.outputs.key }}
+      - name: Build the toolchain
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq make git wget gcc g++ libgmp-dev libmpfr-dev libmpc-dev flex bison \
+               gettext texinfo libncurses-dev autoconf automake rsync
+          sudo mkdir -p /opt/amiga16 && sudo chown "$USER" /opt/amiga16
+          sh tools/build-gcc16.sh /opt/amiga16
+      - name: Build
+        run: |
+          export PATH=/opt/amiga16/bin:$PATH
+          m68k-amigaos-gcc --version | head -n 1
+          make -j"$(nproc)" build/AmiPixelShop
+      # LAYERTEST on an emulated 68040 (vamos): save/load/flatten, valid PNGs.
+      # The gcc 6.5 build of the sacredbanana image fails this (bad zlib checksums).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Smoke test (vamos)
+        run: |
+          pip install amitools==0.8.1 machine68k==0.3.0
+          python3 tools/vamostest.py build/AmiPixelShop build/vamostest
+      - name: Archive (the signed update package needs the author's key, so not here)
+        run: |
+          export PATH=/opt/amiga16/bin:$PATH
+          sh tools/mkpkg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AmiPixelShop-gcc16
+          path: |
+            build/AmiPixelShop.lha
+            build/AmiPixelShop.upd
