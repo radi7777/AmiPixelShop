@@ -3,13 +3,13 @@ Kurz:         Ebenen-Bildbearbeitung, RTG/PiStorm
 Author:       radi777
 Uploader:     thomas.radeck gmail com (radi777, see note below)
 Type:         gfx/edit
-Version:      0.7
+Version:      0.7.1
 Architecture: m68k-amigaos >= 3.2.0
 Requires:     PiStorm (Emu68) or 68060+FPU, RTG 24/32 bit, 128 MB RAM
 Distribution: Aminet
 
-AmiPixelShop 0.7 - Early Beta
-=============================
+AmiPixelShop 0.7.1 - Early Beta
+===============================
 
 A modern, layer-based image editor written natively for the Amiga.
 Not a port and nothing reverse-engineered: written from scratch in plain
