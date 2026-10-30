@@ -42,6 +42,8 @@ Features
   find edges, high pass, mosaic
 - Levels with histogram, Auto and per-channel R/G/B, Curves with histogram
 - Undo/redo with history panel, multiple documents
+- Rulers and guides; selections, shapes, crop and the move tool snap
+  to guides, image edges and layer edges
 - Built-in update: checks GitHub at start (when online), installs
   new versions and restarts (can be turned off in the Help menu)
 - Reduce Colors: optimized palettes (24 bit, OCS 12 bit, MagicWB),

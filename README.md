@@ -44,7 +44,7 @@ as the Amiga allows. Development is done with the help of **Claude** (Anthropic)
 | **Paths** | Pen tool with Bezier curves, Paths panel - make selection, fill, stroke; undoable and saved |
 | **Transform** | Free Transform, Distort, Perspective, Warp, Crop, Image/Canvas Size, Image Rotation, Trim, Reveal All |
 | **Filters** | Liquify, Gaussian, Box & Motion Blur, Unsharp Mask, Sharpen, Median, Add Noise, Emboss, Find Edges, High Pass, Mosaic |
-| **Workflow** | Undo/Redo with History panel and History Brush, multiple documents, Auto-Select move tool, customizable toolbar, tooltips, built-in update from GitHub |
+| **Workflow** | Undo/Redo with History panel and History Brush, multiple documents, Auto-Select move tool, rulers and guides with snapping, customizable toolbar, tooltips, built-in update from GitHub |
 | **Amiga colors** | Reduce Colors with live preview: optimized palettes (24 bit, OCS 12 bit, MagicWB, grayscale), 2-256 colors, EHB, HAM6, HAM8, Floyd-Steinberg / Atkinson / ordered dithering; New Document presets for all classic Amiga screen modes |
 | **Files** | Native `.aps` (keeps everything), layered `.psd` import, IFF ILBM import and export (EHB, HAM, 24 bit, palette and mode kept), PNG, JPEG, plus all formats your datatypes can read |
 
