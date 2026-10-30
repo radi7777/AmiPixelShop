@@ -20,6 +20,9 @@ BOOL rulers_on, guides_show = TRUE, guides_lock, guides_snap = TRUE;
 #define SNAP_PX    6            /* Fangbereich in Bildschirmpixeln */
 
 static LONG gd_idx = -1;        /* gezogene Linie */
+#define MAX_TGT (MAX_LAYERS * 3 + 3)
+static LONG tgt[MAX_TGT], ntgt;  /* Fangziele der gezogenen Linie */
+static void drag_targets(BOOL vert);
 static LONG mark_x = -1, mark_y = -1;
 
 static BOOL in_view(LONG x, LONG y)
@@ -239,6 +242,8 @@ BOOL guides_ruler_down(LONG x, LONG y)
     doc->guide[doc->nguides] = left ? (LONG)floorf(scr2docx(x) + 0.5f) : (LONG)floorf(scr2docy(y) + 0.5f);
     doc->gvert[doc->nguides] = left ? 1 : 0;
     gd_idx = doc->nguides++;
+    drag_targets(left);
+    guides_drag_move(x, y);
     inval_guide(gd_idx);
     drag_status();
     return TRUE;
@@ -250,6 +255,7 @@ BOOL guides_grab(LONG x, LONG y)
     if (i < 0)
         return FALSE;
     gd_idx = i;
+    drag_targets(doc->gvert[i]);
     drag_status();
     return TRUE;
 }
@@ -261,10 +267,19 @@ BOOL guides_dragging(void)
 
 void guides_drag_move(LONG x, LONG y)
 {
-    LONG p;
+    LONG p, i;
+    float f, bd = SNAP_PX / zoom + 0.001f;
     if (gd_idx < 0)
         return;
-    p = doc->gvert[gd_idx] ? (LONG)floorf(scr2docx(x) + 0.5f) : (LONG)floorf(scr2docy(y) + 0.5f);
+    f = doc->gvert[gd_idx] ? scr2docx(x) : scr2docy(y);
+    p = (LONG)floorf(f + 0.5f);
+    /* an Bildrand, Bildmitte und Ebenenkanten/-mitten einrasten */
+    if (guides_snap)
+        for (i = 0; i < ntgt; i++)
+            if (fabsf(f - tgt[i]) < bd) {
+                bd = fabsf(f - tgt[i]);
+                p = tgt[i];
+            }
     if (p == doc->guide[gd_idx])
         return;
     inval_guide(gd_idx);
@@ -426,4 +441,33 @@ void guides_snap_move(LONG *dx, LONG *dy)
         return;
     *dx += snap_shift(mb_x0 + *dx, mb_x1 + *dx, TRUE, doc->w);
     *dy += snap_shift(mb_y0 + *dy, mb_y1 + *dy, FALSE, doc->h);
+}
+
+/* Fangziele fuer eine gezogene Linie: Bildrand und -mitte, Kanten und Mitte
+ * jeder sichtbaren Pixelebene */
+static void drag_targets(BOOL vert)
+{
+    LONG size = vert ? doc->w : doc->h, k;
+    ntgt = 0;
+    tgt[ntgt++] = 0;
+    tgt[ntgt++] = size;
+    tgt[ntgt++] = size / 2;
+    for (k = 0; k < doc->nlayers; k++) {
+        Layer *l = doc->layers[k];
+        LONG a0, a1;
+        if (!l->visible || l->kind != LK_PIXEL)
+            continue;
+        mb_x0 = mb_y0 = 0x7FFFFFFF;
+        mb_x1 = mb_y1 = -0x7FFFFFFF;
+        mb_layer(l);
+        if (mb_x0 >= mb_x1 || mb_y0 >= mb_y1)
+            continue;
+        a0 = vert ? mb_x0 : mb_y0;
+        a1 = vert ? mb_x1 : mb_y1;
+        if (a0 == 0 && a1 == size)
+            continue;           /* fuellt das Bild: schon drin */
+        tgt[ntgt++] = a0;
+        tgt[ntgt++] = a1;
+        tgt[ntgt++] = (a0 + a1) / 2;
+    }
 }
