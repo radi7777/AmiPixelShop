@@ -398,6 +398,9 @@ BOOL net_get_url(const char *url, const char *hdrs, NetResp *r, NetCtl *ctl)
     strncpy(cur, url, 1023);
     cur[1023] = 0;
     for (hop = 0;; hop++) {
+        char *frag = strchr(cur, '#');     /* Fragment geht nicht an den Server (Dropbox haengt "#" an) */
+        if (frag)
+            *frag = 0;
         if (!split_url(cur, host, &path)) {
             memset(r, 0, sizeof(*r));
             seterr(r, "Invalid URL", NULL);

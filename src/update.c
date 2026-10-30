@@ -25,7 +25,7 @@
 #include "tweetnacl.h"
 
 /* Dropbox: feste Freigabelinks (dl=1: Datei direkt statt Vorschauseite) */
-#define UPD_DBX_LATEST ""
+#define UPD_DBX_LATEST "https://www.dropbox.com/scl/fi/nqvdkojervz4w3joqnbyw/latest.txt?rlkey=7xwrw9zwvutlph9iogi08u3bu&dl=1"
 #define UPD_DBX_PKG    ""
 #define UPD_HOST  "api.github.com"
 #define UPD_PATH  "/repos/radi7777/AmiPixelShop/releases/latest"
@@ -93,15 +93,24 @@ static void upd_worker(void)
     char path[40], name[64];
 
     if (j->stage == 0 && j->latest[0]) {
-        /* Dropbox: erste Zeile von latest.txt ist die Versionsnummer */
+        /* Dropbox latest.txt: 1. Zeile Versionsnummer, 2. Zeile (optional) Link zum
+         * Paket - sonst der feste Paketlink */
         if (net_get_url(j->latest, NULL, &r, &j->ctl)) {
-            if (r.status == 200 && r.len > 0 && r.len < 64 && r.body[0] >= '0' && r.body[0] <= '9') {
+            if (r.status == 200 && r.len > 0 && r.len < 1000 && r.body[0] >= '0' && r.body[0] <= '9') {
+                LONG k = 0;
                 j->tag[0] = 'v';
                 for (i = 0; i < r.len && i < (LONG)sizeof(j->tag) - 2 && r.body[i] > ' '; i++)
                     j->tag[i + 1] = r.body[i];
                 j->tag[i + 1] = 0;
-                strcpy(j->url, j->pkg);
-                j->ok = TRUE;
+                while (i < r.len && r.body[i] != '\n')
+                    i++;
+                if (i + 9 < r.len && !strncmp((const char *)r.body + i + 1, "https://", 8)) {
+                    for (i++; i < r.len && r.body[i] > ' ' && k < (LONG)sizeof(j->url) - 1; i++)
+                        j->url[k++] = r.body[i];
+                    j->url[k] = 0;
+                } else
+                    strcpy(j->url, j->pkg);
+                j->ok = TRUE;           /* ohne Paketlink: Hinweis zum Selbst-Laden */
             }
             net_free(&r);
         }
@@ -193,11 +202,11 @@ void upd_check(BOOL manual)
     j->manual = manual;
     j->ctl.timeout = 20;
     /* Quelle zum Testen ueberschreibbar: ENV:AmiPixelShop/updlatest und updpkg */
-    if (GetVar("AmiPixelShop/updlatest", j->latest, sizeof(j->latest), GVF_GLOBAL_ONLY) <= 0 ||
-        GetVar("AmiPixelShop/updpkg", j->pkg, sizeof(j->pkg), GVF_GLOBAL_ONLY) <= 0) {
+    if (GetVar("AmiPixelShop/updlatest", j->latest, sizeof(j->latest), GVF_GLOBAL_ONLY) <= 0) {
         strcpy(j->latest, UPD_DBX_LATEST);
         strcpy(j->pkg, UPD_DBX_PKG);
-    }
+    } else if (GetVar("AmiPixelShop/updpkg", j->pkg, sizeof(j->pkg), GVF_GLOBAL_ONLY) <= 0)
+        j->pkg[0] = 0;
     if (launch(j) && manual)
         status_message("Checking for updates...");
 }
