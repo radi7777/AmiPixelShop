@@ -788,6 +788,7 @@ void upd_poll(void);
 void upd_tick(void);
 void upd_shutdown(void);
 void upd_relaunch(void);
+void upd_verify_file(const char *path);
 void main_request_quit(void);
 
 #endif

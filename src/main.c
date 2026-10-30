@@ -2611,6 +2611,12 @@ static int app_main(int argc, char **argv)
         return RETURN_OK;
     }
 
+    if (argc == 3 && !strcasecmp(argv[1], "UPDVERIFY")) {
+        upd_verify_file(argv[2]);
+        cleanup();
+        return RETURN_OK;
+    }
+
     if (argc == 2 && !strcasecmp(argv[1], "NETTEST")) {
         net_test();
         cleanup();

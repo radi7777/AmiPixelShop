@@ -19,7 +19,7 @@ all: $(BUILD)/AmiPixelShop $(BUILD)/proto0
 # Amiga-Mathe-Libraries, und die zerstoeren die FPU-Register fp2-fp7.
 LDFLAGS = -noixemul -mcpu=68020 -m68881
 
-$(BUILD)/AmiPixelShop: $(OBJS) $(ZOBJS) $(AOBJS)
+$(BUILD)/AmiPixelShop: $(OBJS) $(ZOBJS) $(AOBJS) $(BUILD)/tweetnacl.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 $(BUILD)/pixel_asm.o: src/pixel_asm.s
@@ -47,7 +47,12 @@ $(BUILD)/ai.o: src/ai.c src/apx.h src/net.h
 
 $(BUILD)/update.o: src/update.c src/apx.h src/net.h src/version.h
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) -Isrc $(STB) -c -o $@ $<
+	$(CC) $(CFLAGS) -Isrc $(STB) -Ithird_party/tweetnacl -c -o $@ $<
+
+# Ed25519-Pruefung der Update-Pakete (TweetNaCl, gemeinfrei)
+$(BUILD)/tweetnacl.o: third_party/tweetnacl/tweetnacl.c
+	@mkdir -p $(BUILD)
+	$(CC) $(LIBFLAGS) -Ithird_party/tweetnacl -c -o $@ $<
 
 $(BUILD)/main.o $(BUILD)/net.o: src/version.h
 

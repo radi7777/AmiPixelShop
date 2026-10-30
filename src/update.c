@@ -1,14 +1,16 @@
 /*
- * update.c - Update ueber GitHub-Releases
+ * update.c - Update ueber Dropbox (latest.txt + Paket) oder GitHub-Releases
  *
  * Beim Start (abschaltbar) und ueber Help > Check for Updates fragt ein
- * Hintergrundprozess das neueste Release ab. Ist es neuer, wird nachgefragt,
- * das Paket AmiPixelShop.upd geladen, geprueft (CRC), ins Programmverzeichnis
- * geschrieben und das Programm neu gestartet. Ohne Netz passiert nichts.
+ * Hintergrundprozess die neueste Version ab: zuerst latest.txt in der Dropbox,
+ * geht das nicht, das neueste GitHub-Release. Ist sie neuer, wird nachgefragt,
+ * das Paket AmiPixelShop.upd geladen, die Signatur geprueft (Ed25519), entpackt
+ * (CRC), ins Programmverzeichnis geschrieben und das Programm neu gestartet.
+ * Ohne Netz passiert nichts. Pakete ohne gueltige Signatur werden abgelehnt.
  *
  * Paketformat (tools/mkupd.py):
  *   "APSUPD1\n", je Datei "F <name> <laenge> <zlib-laenge> <crc32 hex>\n" + zlib-Daten,
- *   zum Schluss "END\n".
+ *   dann "END\n", dann "SIG <128 Hex>\n" (Signatur ueber alles davor).
  */
 #include <stdlib.h>
 #include <string.h>
@@ -20,12 +22,29 @@
 #include "net.h"
 #include "version.h"
 #include "zlib.h"
+#include "tweetnacl.h"
 
+/* Dropbox: feste Freigabelinks (dl=1: Datei direkt statt Vorschauseite) */
+#define UPD_DBX_LATEST ""
+#define UPD_DBX_PKG    ""
 #define UPD_HOST  "api.github.com"
 #define UPD_PATH  "/repos/radi7777/AmiPixelShop/releases/latest"
 #define UPD_ASSET "AmiPixelShop.upd"
 #define UPD_EXE   "AmiPixelShop"
 #define UPD_MAXF  64
+#define UPD_SIGLEN 133          /* "SIG " + 128 Hex + "\n" */
+
+/* oeffentlicher Schluessel; der geheime liegt nur beim Autor */
+static const unsigned char upd_pk[32] = {
+    0xe8, 0x6b, 0x34, 0x83, 0x01, 0x67, 0x25, 0x52, 0x50, 0xfd, 0x8a, 0x70, 0xee, 0xf0, 0xfe, 0x29,
+    0x35, 0x3b, 0x1d, 0xba, 0x24, 0xb5, 0x48, 0x29, 0x96, 0xf6, 0x1d, 0x98, 0x27, 0x1a, 0xb6, 0x8d
+};
+
+/* TweetNaCl will das fuer die Schluesselerzeugung; die nutzen wir nicht */
+void randombytes(unsigned char *x, unsigned long long n)
+{
+    memset(x, 0, (size_t)n);
+}
 
 typedef struct UpdJob {
     struct Task *parent;
@@ -37,6 +56,8 @@ typedef struct UpdJob {
     char err[128];
     char tag[32];               /* z. B. "v0.6-beta" */
     char url[1024];             /* Paket, leer = Release ohne Paket */
+    char latest[512];           /* Dropbox latest.txt (leer: nur GitHub) */
+    char pkg[512];              /* Dropbox-Paket */
     UBYTE *data;
     LONG len;
 } UpdJob;
@@ -71,7 +92,21 @@ static void upd_worker(void)
     LONG vl, i;
     char path[40], name[64];
 
-    if (j->stage == 0) {
+    if (j->stage == 0 && j->latest[0]) {
+        /* Dropbox: erste Zeile von latest.txt ist die Versionsnummer */
+        if (net_get_url(j->latest, NULL, &r, &j->ctl)) {
+            if (r.status == 200 && r.len > 0 && r.len < 64 && r.body[0] >= '0' && r.body[0] <= '9') {
+                j->tag[0] = 'v';
+                for (i = 0; i < r.len && i < (LONG)sizeof(j->tag) - 2 && r.body[i] > ' '; i++)
+                    j->tag[i + 1] = r.body[i];
+                j->tag[i + 1] = 0;
+                strcpy(j->url, j->pkg);
+                j->ok = TRUE;
+            }
+            net_free(&r);
+        }
+    }
+    if (j->stage == 0 && !j->ok) {
         if (!net_https(UPD_HOST, "GET", UPD_PATH, "Accept: application/vnd.github+json\r\n", NULL, 0, &r, &j->ctl)) {
             strcpy(j->err, r.err);
         } else {
@@ -157,6 +192,12 @@ void upd_check(BOOL manual)
     j->parent = FindTask(NULL);
     j->manual = manual;
     j->ctl.timeout = 20;
+    /* Quelle zum Testen ueberschreibbar: ENV:AmiPixelShop/updlatest und updpkg */
+    if (GetVar("AmiPixelShop/updlatest", j->latest, sizeof(j->latest), GVF_GLOBAL_ONLY) <= 0 ||
+        GetVar("AmiPixelShop/updpkg", j->pkg, sizeof(j->pkg), GVF_GLOBAL_ONLY) <= 0) {
+        strcpy(j->latest, UPD_DBX_LATEST);
+        strcpy(j->pkg, UPD_DBX_PKG);
+    }
     if (launch(j) && manual)
         status_message("Checking for updates...");
 }
@@ -203,15 +244,60 @@ static BOOL safe_name(const char *n)
     return TRUE;
 }
 
+static LONG hexval(UBYTE c)
+{
+    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 :
+           c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+}
+
+/* Signatur am Paketende pruefen; TRUE = echt. *len wird auf den signierten Teil gekuerzt */
+BOOL upd_verify(const UBYTE *data, LONG *len, char *err)
+{
+    const UBYTE *t;
+    unsigned char *sm, *m;
+    unsigned long long mlen;
+    LONG n, i, ok;
+    if (*len <= UPD_SIGLEN || memcmp(data + *len - UPD_SIGLEN, "SIG ", 4) || data[*len - 1] != '\n') {
+        strcpy(err, "The update package is not signed");
+        return FALSE;
+    }
+    n = *len - UPD_SIGLEN;
+    t = data + n + 4;
+    if (!(sm = malloc(n + 64)) || !(m = malloc(n + 64))) {
+        free(sm);
+        strcpy(err, "Not enough memory");
+        return FALSE;
+    }
+    for (i = 0; i < 64; i++) {
+        LONG h = hexval(t[2 * i]), l = hexval(t[2 * i + 1]);
+        sm[i] = (unsigned char)((h << 4) | l);
+        if (h < 0 || l < 0)
+            break;
+    }
+    memcpy(sm + 64, data, n);
+    ok = i == 64 && crypto_sign_open(m, &mlen, sm, n + 64, upd_pk) == 0;
+    free(m);
+    free(sm);
+    if (!ok) {
+        strcpy(err, "The update package has no valid signature");
+        return FALSE;
+    }
+    *len = n;
+    return TRUE;
+}
+
 /* Paket pruefen und einspielen; err bei FALSE */
 static BOOL install(const UBYTE *data, LONG len, char *err)
 {
     static char names[UPD_MAXF][104];
     char dir[256], line[200], path[400], path2[400];
-    const UBYTE *p = data, *end = data + len;
+    const UBYTE *p = data, *end;
     LONG nf = 0, i;
     BPTR lock = GetProgramDir();
 
+    if (!upd_verify(data, &len, err))
+        return FALSE;
+    end = data + len;
     if (!lock || !NameFromLock(lock, dir, sizeof(dir))) {
         strcpy(err, "Program directory not found");
         return FALSE;
@@ -338,7 +424,7 @@ static void found(UpdJob *j)
     if (!j->url[0]) {
         if (j->manual) {
             sprintf(msg, "AmiPixelShop %s is available.\nPlease download it from\n"
-                    "github.com/radi7777/AmiPixelShop/releases", nice(j->tag));
+                    "Aminet or github.com/radi7777/AmiPixelShop", nice(j->tag));
             request(msg, "OK");
         }
         return;
@@ -455,4 +541,32 @@ void upd_relaunch(void)
         if (in) Close(in);
         if (out) Close(out);
     }
+}
+
+/* Kommandozeile: AmiPixelShop UPDVERIFY <datei> - Signatur pruefen, Dauer messen */
+void upd_verify_file(const char *path)
+{
+    BPTR fh = Open(path, MODE_OLDFILE);
+    LONG len;
+    UBYTE *buf;
+    char err[128];
+    ULONG t;
+    if (!fh) {
+        PutStr("Cannot open file\n");
+        return;
+    }
+    Seek(fh, 0, OFFSET_END);
+    len = Seek(fh, 0, OFFSET_BEGINNING);
+    if (len <= 0 || !(buf = malloc(len)) || Read(fh, buf, len) != len) {
+        Close(fh);
+        PutStr("Cannot read file\n");
+        return;
+    }
+    Close(fh);
+    t = now_us();
+    if (upd_verify(buf, &len, err))
+        Printf("Signature OK (%ld ms)\n", (now_us() - t) / 1000);
+    else
+        Printf("FAILED: %s (%ld ms)\n", (ULONG)err, (now_us() - t) / 1000);
+    free(buf);
 }
