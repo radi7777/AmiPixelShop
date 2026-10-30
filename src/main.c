@@ -23,6 +23,8 @@
 #include <proto/asl.h>
 #include <libraries/asl.h>
 #include <proto/Picasso96.h>
+#include <cybergraphx/cybergraphics.h>
+#include <proto/cybergraphics.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,6 +41,7 @@ static const char verstag[] __attribute__((used)) = "$VER: AmiPixelShop " APS_VE
 struct IntuitionBase *IntuitionBase;
 struct GfxBase *GfxBase;
 struct Library *P96Base;
+struct Library *CyberGfxBase;   /* Ersatz ohne Picasso96 (MorphOS) */
 struct Library *KeymapBase;
 struct Library *AslBase;
 struct Device *TimerBase;
@@ -2258,6 +2261,7 @@ static void cleanup(void)
     if (AslBase) CloseLibrary(AslBase);
     if (KeymapBase) CloseLibrary(KeymapBase);
     if (P96Base) CloseLibrary(P96Base);
+    if (CyberGfxBase) CloseLibrary(CyberGfxBase);
     if (GfxBase) CloseLibrary((struct Library *)GfxBase);
     if (IntuitionBase) CloseLibrary((struct Library *)IntuitionBase);
 }
@@ -2416,19 +2420,48 @@ static BOOL open_display(void)
     }
     SW = wb->Width > 1920 ? 1920 : wb->Width;
     SH = wb->Height > 1080 ? 1080 : wb->Height;
-    bidtags[0].ti_Tag = P96BIDTAG_NominalWidth;  bidtags[0].ti_Data = SW;
-    bidtags[1].ti_Tag = P96BIDTAG_NominalHeight; bidtags[1].ti_Data = SH;
-    bidtags[2].ti_Tag = P96BIDTAG_Depth;         bidtags[2].ti_Data = 32;
-    bidtags[3].ti_Tag = P96BIDTAG_FormatsAllowed;
-    bidtags[3].ti_Data = RGBFF_A8R8G8B8 | RGBFF_B8G8R8A8 | RGBFF_R8G8B8A8;
-    bidtags[4].ti_Tag = TAG_DONE;
-    modeid = p96BestModeIDTagList(bidtags);
+    if (P96Base) {
+        bidtags[0].ti_Tag = P96BIDTAG_NominalWidth;  bidtags[0].ti_Data = SW;
+        bidtags[1].ti_Tag = P96BIDTAG_NominalHeight; bidtags[1].ti_Data = SH;
+        bidtags[2].ti_Tag = P96BIDTAG_Depth;         bidtags[2].ti_Data = 32;
+        bidtags[3].ti_Tag = P96BIDTAG_FormatsAllowed;
+        bidtags[3].ti_Data = RGBFF_A8R8G8B8 | RGBFF_B8G8R8A8 | RGBFF_R8G8B8A8;
+        bidtags[4].ti_Tag = TAG_DONE;
+        modeid = p96BestModeIDTagList(bidtags);
+    } else {
+        bidtags[0].ti_Tag = CYBRBIDTG_NominalWidth;  bidtags[0].ti_Data = SW;
+        bidtags[1].ti_Tag = CYBRBIDTG_NominalHeight; bidtags[1].ti_Data = SH;
+        bidtags[2].ti_Tag = CYBRBIDTG_Depth;         bidtags[2].ti_Data = 32;
+        bidtags[3].ti_Tag = TAG_DONE;
+        modeid = BestCModeIDTagList(bidtags);
+    }
     if (modeid == (ULONG)INVALID_ID)
         modeid = GetVPModeID(&wb->ViewPort);
     UnlockPubScreen(NULL, wb);
 open:
     blank_ptr = AllocVec(16, MEMF_CHIP | MEMF_CLEAR);
     return open_screen(modeid);
+}
+
+/* Kommandozeile: AmiPixelShop BLITTEST - Tempo der Uebertragung in den Bildschirm
+ * (Picasso96 oder CyberGraphX), Vollbild und 400x300 */
+static void blit_test(void)
+{
+    ULONG t, i;
+    LONG k;
+    for (k = 0; k < SW * SH; k++)
+        bb[k] = 0xFF000000 | (k * 2654435761UL >> 8);
+    Printf("%s, %ld x %ld\n", (ULONG)(P96Base ? "Picasso96" : "CyberGraphX"), SW, SH);
+    t = now_us();
+    for (i = 0; i < 100; i++)
+        blit(0, 0, SW, SH);
+    t = now_us() - t;
+    Printf("full screen: %ld.%ld fps\n", 100000000 / t, (1000000000 / t) % 10);
+    t = now_us();
+    for (i = 0; i < 1000; i++)
+        blit(100 + (i & 63), 100, 400, 300);
+    t = now_us() - t;
+    Printf("400x300:     %ld us per blit\n", t / 1000);
 }
 
 /* Kommandozeile: AmiPixelShop NETTEST - prueft HTTPS, Base64, JSON und den OpenRouter-Key */
@@ -2529,10 +2562,18 @@ static int app_main(int argc, char **argv)
 
     IntuitionBase = (struct IntuitionBase *)OpenLibrary("intuition.library", 39);
     GfxBase = (struct GfxBase *)OpenLibrary("graphics.library", 39);
-    P96Base = OpenLibrary("Picasso96API.library", 2);
+    {
+        /* Picasso96 bevorzugt; sonst CyberGraphX (MorphOS). ENV:AmiPixelShop/cgx = 1
+         * erzwingt CyberGraphX zum Testen. */
+        char v[4];
+        if (GetVar("AmiPixelShop/cgx", v, sizeof(v), GVF_GLOBAL_ONLY) <= 0 || v[0] != '1')
+            P96Base = OpenLibrary("Picasso96API.library", 2);
+        if (!P96Base)
+            CyberGfxBase = OpenLibrary("cybergraphics.library", 41);
+    }
     KeymapBase = OpenLibrary("keymap.library", 37);
-    if (!IntuitionBase || !GfxBase || !P96Base || !KeymapBase) {
-        PutStr("Missing libraries (Picasso96API.library?)\n");
+    if (!IntuitionBase || !GfxBase || (!P96Base && !CyberGfxBase) || !KeymapBase) {
+        PutStr("Missing libraries: needs Picasso96API.library or cybergraphics.library\n");
         cleanup();
         return RETURN_FAIL;
     }
@@ -2630,7 +2671,10 @@ static int app_main(int argc, char **argv)
     brush_rebuild();
     ui_draw_all();
     view_flush();
-    if (loadpath && !strcasecmp(loadpath, "PERF")) {
+    if (loadpath && !strcasecmp(loadpath, "BLITTEST")) {
+        blit_test();
+        quit = TRUE;
+    } else if (loadpath && !strcasecmp(loadpath, "PERF")) {
         extern void perf_run(void);
         perf_run();
         quit = TRUE;

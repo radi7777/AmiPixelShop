@@ -55,6 +55,7 @@ Requirements
 - PiStorm with Emu68 (JIT-emulated 68040 + FPU) - recommended
 - maybe a real 68060 with FPU and RTG (untested)
 - AmigaOS 3.2, Picasso96/P96 with a 24 or 32 bit screen mode
+  (without Picasso96: CyberGraphX, e.g. MorphOS - untested)
 - 128 MB Fast RAM or more
 - for the AI features: Roadshow, AmiSSL v5, OpenRouter API key
 

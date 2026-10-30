@@ -8,6 +8,8 @@
 #include <proto/exec.h>
 #include <proto/timer.h>
 #include <proto/Picasso96.h>
+#include <cybergraphx/cybergraphics.h>
+#include <proto/cybergraphics.h>
 #include <string.h>
 #include "apx.h"
 
@@ -17,6 +19,7 @@ typedef struct { UBYTE w, h; BYTE xo, yo; UBYTE adv; UWORD off; } Glyph;
 #include "font_small.h"
 
 extern struct Library *P96Base;
+extern struct Library *CyberGfxBase;    /* nur ohne Picasso96 (MorphOS, CyberGraphX) */
 extern struct Device *TimerBase;
 
 LONG SW, SH;
@@ -353,6 +356,8 @@ void icon(LONG x, LONG y, LONG id, ULONG c)
 }
 
 /* ---- Blit Backbuffer -> VRAM ----
+ * Ohne Picasso96API.library (MorphOS, reines CyberGraphX) dasselbe ueber
+ * cybergraphics.library; gewaehlt wird einmal beim Start.
  * Bewusst nur ueber p96WritePixelArray: P96 sperrt selbst. Direktes
  * p96LockBitMap aus unserem Task hat sich zusammen mit anderen Tasks, die
  * den Bildschirm lesen (Screengrabber), auf Emu68 aufgehaengt - und war im
@@ -367,6 +372,10 @@ void blit(LONG x, LONG y, LONG w, LONG h)
     if (y + h > SH) h = SH - y;
     if (w <= 0 || h <= 0)
         return;
+    if (!P96Base) {
+        WritePixelArray(bb, x, y, SW * 4, win->RPort, x, y, w, h, RECTFMT_ARGB);
+        return;
+    }
     ri.Memory = bb;
     ri.BytesPerRow = SW * 4;
     ri.pad = 0;

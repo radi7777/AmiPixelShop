@@ -53,7 +53,8 @@ as the Amiga allows. Development is done with the help of **Claude** (Anthropic)
 - **PiStorm** with Emu68 (JIT-emulated 68040 + FPU) - this is the target platform
 - *Maybe:* a real 68060 with FPU and RTG (untested, will be slow at high resolutions)
 - **AmigaOS 3.2**
-- **RTG** (Picasso96 / P96) with a 24 or 32 bit screen mode, 1024&times;600 up to 1920&times;1080
+- **RTG** (Picasso96 / P96) with a 24 or 32 bit screen mode, 1024&times;600 up to 1920&times;1080.
+  Without Picasso96 it falls back to CyberGraphX (`cybergraphics.library`), e.g. on MorphOS - untested there
 - 128 MB Fast RAM or more
 - *For the AI features:* Roadshow, AmiSSL v5 and an OpenRouter API key
 
