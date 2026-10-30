@@ -43,7 +43,7 @@ struct Library *KeymapBase;
 struct Library *AslBase;
 struct Device *TimerBase;
 
-unsigned long __stack = 262144;     /* stb_image braucht Stapel */
+#define APS_STACK 262144   /* stb_image (GIF: 32 KB LZW-Tabelle) braucht Stapel */
 
 static struct MsgPort *tport;
 static struct timerequest *treq;
@@ -2431,7 +2431,7 @@ static void net_test(void)
     net_free(&r);
 }
 
-int main(int argc, char **argv)
+static int app_main(int argc, char **argv)
 {
     LONG dw = 1280, dh = 960;
     const char *loadpath = NULL;
@@ -2630,4 +2630,37 @@ int main(int argc, char **argv)
     cleanup();
     upd_relaunch();
     return RETURN_OK;
+}
+
+/* Icon/Shell geben oft nur 4-8 KB Stapel: selbst einen grossen holen.
+   Variablen statisch, weil nach StackSwap SP-relative Locals ungueltig sind. */
+static struct StackSwapStruct sss;
+static int m_argc, m_ret;
+static char **m_argv;
+static APTR m_stk;
+
+/* ohne Argumente: alle Stapeloperationen bleiben auf dem neuen Stapel */
+static void __attribute__((noinline)) call_app(void)
+{
+    m_ret = app_main(m_argc, m_argv);
+}
+
+int main(int argc, char **argv)
+{
+    struct Task *me = FindTask(NULL);
+    if ((ULONG)me->tc_SPUpper - (ULONG)me->tc_SPLower >= APS_STACK)
+        return app_main(argc, argv);
+    m_stk = AllocVec(APS_STACK, MEMF_ANY);
+    if (!m_stk)
+        return app_main(argc, argv);
+    m_argc = argc;
+    m_argv = argv;
+    sss.stk_Lower = m_stk;
+    sss.stk_Upper = (ULONG)m_stk + APS_STACK;
+    sss.stk_Pointer = (APTR)sss.stk_Upper;
+    StackSwap(&sss);
+    call_app();
+    StackSwap(&sss);
+    FreeVec(m_stk);
+    return m_ret;
 }
