@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/overview.jpg" alt="AmiPixelShop running at 1920x1080 on a PiStorm Amiga 500" width="640">
+  <img src="docs/readme/overview.jpg" alt="AmiPixelShop running at 1920x1080 on a PiStorm Amiga 500" width="800">
 </p>
 
 <h1 align="center">AmiPixelShop</h1>
