@@ -794,7 +794,7 @@ void ui_draw_options(void)
             chk_x[0] = x;
             x = checkbox(x, y, "Generative AI", heal_ai);
             chk_w[0] = x - chk_x[0];
-            text(x + 18, ty, heal_ai ? "Paint over an object - AI removes it (OpenRouter)" :
+            text(x + 18, ty, heal_ai ? "Paint over an object - AI removes it" :
                  "Paint over a spot - it is replaced by matching texture from nearby", COL_DIM);
         }
         break;
@@ -1446,6 +1446,7 @@ void ui_prefs_load(void)
         if ((q = strstr(buf, "aifill=")) && q[7] >= '0' && q[7] <= '2') ai_fill_model = q[7] - '0';
         if ((q = strstr(buf, "aifast=")) && q[7] >= '0' && q[7] <= '1') ai_fast_model = q[7] - '0';
         if ((q = strstr(buf, "aivar=")) && q[6] >= '1' && q[6] <= '3') ai_variants = q[6] - '0';
+        if ((q = strstr(buf, "aiprov=")) && q[7] >= '0' && q[7] <= '2') ai_provider = q[7] - '0';
     }
     for (i = 0; i < T_COUNT && !tool_visible[i]; i++)
         ;
@@ -1470,8 +1471,8 @@ void ui_prefs_save(void)
         sprintf(buf + strlen(buf), "mode=0x%08lx\n", (unsigned long)pref_mode);
     sprintf(buf + strlen(buf), "autosel=%ld\nautogroup=%ld\ntaskbar=%ld\n", (long)move_autosel,
             (long)move_autogroup, (long)ai_taskbar);
-    sprintf(buf + strlen(buf), "aifill=%ld\naifast=%ld\naivar=%ld\n", (long)ai_fill_model,
-            (long)ai_fast_model, (long)ai_variants);
+    sprintf(buf + strlen(buf), "aifill=%ld\naifast=%ld\naivar=%ld\naiprov=%ld\n", (long)ai_fill_model,
+            (long)ai_fast_model, (long)ai_variants, (long)ai_provider);
     sprintf(buf + strlen(buf), "updcheck=%ld\nrulers=%ld\nsnap=%ld\n", (long)upd_auto, (long)rulers_on,
             (long)guides_snap);
     if (upd_skip[0])

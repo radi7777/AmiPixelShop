@@ -15,6 +15,7 @@ import glob, os, sys, zlib
 files = [("AmiPixelShop", "build/AmiPixelShop"), ("Guide.html", "docs/Guide.html"),
          ("LICENSE", "LICENSE"), ("AmiPixelShop.readme", "AmiPixelShop.readme")]
 files += [("images/" + os.path.basename(p), p) for p in sorted(glob.glob("docs/images/*.jpg"))]
+files += [("ComfyUI/" + os.path.basename(p), p) for p in sorted(glob.glob("dist/ComfyUI/*"))]
 
 out = bytearray(b"APSUPD1\n")
 for name, src in files:

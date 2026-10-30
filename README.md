@@ -33,7 +33,7 @@ as the Amiga allows. Development is done with the help of **Claude** (Anthropic)
 
 | | |
 |---|---|
-| **AI** | Generative Fill with a text prompt, Remove (button or brush), Extend / outpainting, Select Subject, Remove Background - variants and Generate again, via OpenRouter directly from the Amiga (AmiSSL) |
+| **AI** | Generative Fill with a text prompt, Remove (button or brush), Extend / outpainting, Select Subject, Remove Background - variants and Generate again, via OpenRouter or the Google Gemini API directly from the Amiga (AmiSSL), or with ComfyUI on a PC in your LAN |
 | **Layers** | Up to 64 layers, 25 blend modes, opacity & fill, locks, groups (pass through / isolated), multi-selection, drag &amp; drop |
 | **Masks** | Layer and group masks (linked or unlinked), clipping masks |
 | **Adjustments** | Levels with histogram, draggable sliders, Auto and per-channel R/G/B; Curves with histogram; Brightness/Contrast, Hue/Saturation, Threshold, Posterize, ... |
@@ -56,7 +56,7 @@ as the Amiga allows. Development is done with the help of **Claude** (Anthropic)
 - **RTG** (Picasso96 / P96) with a 24 or 32 bit screen mode, 1024&times;600 up to 1920&times;1080.
   Without Picasso96 it falls back to CyberGraphX (`cybergraphics.library`), e.g. on MorphOS - untested there
 - 128 MB Fast RAM or more
-- *For the AI features:* Roadshow, AmiSSL v5 and an OpenRouter API key
+- *For the AI features:* Roadshow, AmiSSL v5 and an OpenRouter or Google Gemini API key - or Roadshow and a PC with ComfyUI in your network
 
 **Tested on:** Amiga 500 + PiStorm (Raspberry Pi 3A+, Emu68), AmigaOS 3.2.3, P96.
 

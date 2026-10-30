@@ -1,5 +1,5 @@
 /*
- * net.h - HTTPS ueber Roadshow (bsdsocket) + AmiSSL v5, Base64, Mini-JSON
+ * net.h - HTTP(S) ueber Roadshow (bsdsocket) + AmiSSL v5, Base64, Mini-JSON
  *
  * Alle Netzfunktionen oeffnen bsdsocket/AmiSSL im aufrufenden Task selbst
  * (Bibliotheksbasen sind dort pro Task) - so laeuft eine Anfrage auch in
@@ -29,6 +29,10 @@ typedef struct NetCtl {
 BOOL net_https(const char *host, const char *method, const char *path,
                const char *hdrs, const void *body, LONG blen,
                NetResp *r, NetCtl *ctl);
+/* wie net_https, mit Port; tls FALSE: einfaches HTTP ohne AmiSSL */
+BOOL net_http(const char *host, LONG port, BOOL tls, const char *method, const char *path,
+              const char *hdrs, const void *body, LONG blen,
+              NetResp *r, NetCtl *ctl);
 void net_free(NetResp *r);
 /* GET einer https-URL, folgt bis zu 5 Weiterleitungen */
 BOOL net_get_url(const char *url, const char *hdrs, NetResp *r, NetCtl *ctl);

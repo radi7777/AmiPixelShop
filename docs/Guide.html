@@ -411,13 +411,53 @@ Create a key under <i>Keys</i>; it is a good idea to set a <b>credit limit</b> f
 AmiPixelShop stores it in <tt>ENVARC:AmiPixelShop/openrouter.key</tt>, checks it at once and shows
 how much has been used and how much of the limit is left.
 </ol>
+<p><b>Alternative: Google Gemini directly.</b> Instead of OpenRouter you can use a Gemini API key from
+<b>aistudio.google.com/apikey</b> (billing is set up in Google AI Studio; a Gemini app subscription
+such as Google AI Pro does <i>not</i> include API access). Choose <b>Provider: Google Gemini</b> in
+<b>Edit &gt; AI Settings...</b>, then enter the key with <b>Edit &gt; AI API Key...</b> - it is stored in
+<tt>ENVARC:AmiPixelShop/gemini.key</tt>. The same Nano Banana models are used; the status bar shows no
+costs in this mode (see the usage page in Google AI Studio).</p>
+<p><b>Alternative: ComfyUI on a PC in your network.</b> Free and private - nothing leaves your LAN.
+No AmiSSL needed (plain HTTP).</p>
+<ol>
+<li>On the PC, start ComfyUI with <tt>--listen</tt> (for example <tt>python main.py --listen</tt>) so
+the Amiga can connect, allow port 8188 in its firewall, and install the models of the workflow.
+<li>In AmiPixelShop choose <b>Provider: ComfyUI (LAN)</b> in <b>Edit &gt; AI Settings...</b> and enter the
+address of the PC, for example <tt>192.168.1.20:8188</tt>, with <b>Edit &gt; AI API Key...</b> (stored in
+<tt>ENVARC:AmiPixelShop/comfyui.server</tt>). AmiPixelShop connects and shows the GPU of the PC.
+<li>The work is done by a ComfyUI workflow in API format. AmiPixelShop sends the image with the area to
+fill made <b>transparent</b> - the <i>Load Image</i> node turns that into the MASK - and takes the
+image of the <i>Save Image</i> node.
+</ol>
+<table border="1" cellpadding="6" cellspacing="0" bordercolor="#444444">
+<tr><th>Workflow file</th><th>Used for</th></tr>
+<tr><td><tt>comfy_fill.json</tt></td><td>Generative Fill; also Remove and Extend unless <tt>comfy_remove.json</tt>
+exists. The included one uses <b>Flux.1 Fill dev</b>.</td></tr>
+<tr><td><tt>comfy_fill_gguf.json</tt></td><td>The same with a <b>GGUF</b> model such as
+<tt>flux1-fill-dev-Q6_K.gguf</tt> (much smaller). Needs the <i>ComfyUI-GGUF</i> custom node (ComfyUI-Manager) -
+the standard loader does not list .gguf files. Save it as <tt>comfy_fill.json</tt>.</td></tr>
+<tr><td><tt>comfy_fill_sd.json</tt></td><td>Example for any SD 1.5 / SDXL inpainting checkpoint (smaller GPUs) - enter your
+model name and save it as <tt>comfy_fill.json</tt>.</td></tr>
+<tr><td><tt>comfy_remove.json</tt></td><td>Optional: Remove and Extend (for example with LaMa).</td></tr>
+<tr><td><tt>comfy_segment.json</tt></td><td>Optional: Select Subject and Remove Background. Needs a background removal
+node (BiRefNet, RMBG, ...): Load Image &gt; remover &gt; Convert Mask to Image &gt; Save Image, subject white.</td></tr>
+</table>
+<p>AmiPixelShop looks for them in <tt>ENV:AmiPixelShop/</tt>, <tt>ENVARC:AmiPixelShop/</tt> and the
+<tt>ComfyUI</tt> drawer next to the program. For your own workflow: <i>Workflow &gt; Export (API)</i> in ComfyUI,
+then in a text editor put <tt>"%image%"</tt> as the image of the Load Image node, <tt>%prompt%</tt> into the
+prompt text and optionally <tt>"%seed%"</tt> as the seed (a new one for every request, so <b>Generate again</b>
+gives new variants). The first request can take a while because the PC loads the models. If a model is
+missing, the error message lists the ones ComfyUI has. See <tt>ComfyUI/ReadMe.txt</tt>.</p>
+<p>For troubleshooting, every AI request writes its steps to <tt>T:AmiPixelShop-AI.log</tt>
+(sizes, HTTP status, where it stopped).</p>
 
 <h3>Costs and privacy</h3>
 <ul>
 <li>One request costs about <b>3.4 to 4 US cents</b> with the default models (Nano Banana Pro: about 13 cents).
 The status bar shows the cost of every request and the total of the session.
 <li>A request takes about <b>10 to 15 seconds</b>. You can keep working meanwhile.
-<li>The selected part of the image is sent to OpenRouter and the model provider (Google). Do not use the AI features
+<li>The selected part of the image is sent to OpenRouter (if used) and the model provider (Google);
+with ComfyUI it only goes to your PC. Do not use the AI features
 for pictures that must stay private.
 </ul>
 

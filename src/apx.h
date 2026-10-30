@@ -763,7 +763,7 @@ BOOL ai_start(const char *prompt);  /* NULL: Inhalt der Auswahl entfernen */
 BOOL ai_start_mask(UBYTE *m);       /* Entfernen mit eigener Maske (w*h, wird veraendert) */
 BOOL ai_segment(LONG kind);         /* 1: Select Subject, 2: Remove Background */
 extern BOOL ai_taskbar;             /* schwebende KI-Leiste anzeigen */
-extern LONG ai_fill_model, ai_fast_model, ai_variants;
+extern LONG ai_fill_model, ai_fast_model, ai_variants, ai_provider;   /* ai_provider: 0 OpenRouter, 1 Gemini, 2 ComfyUI */
 void ai_settings(void);
 void ai_key_dialog(void);
 BOOL ai_regenerate(void);
