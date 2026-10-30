@@ -733,6 +733,8 @@ void guides_add(LONG pos, BOOL vert);
 void guides_clear(void);
 void guides_snap_pt(float *x, float *y);     /* Dokumentkoordinaten an Linien/Rand */
 void guides_snap_scr(LONG *x, LONG *y);      /* dasselbe in Bildschirmkoordinaten */
+void guides_move_begin(void);                /* Umriss des bewegten Inhalts merken */
+void guides_snap_move(LONG *dx, LONG *dy);   /* Versatz beim Verschieben einrasten */
 
 /* ---- Korrekturen und Filter (filter.c) ---- */
 void filter_command(LONG cmd);

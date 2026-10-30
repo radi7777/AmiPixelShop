@@ -524,6 +524,7 @@ static void mouse_down(UWORD qual, ULONG secs, ULONG mics)
         selection_changed();
         break;
     case T_MOVE:
+        guides_move_begin();    /* vor move_begin: das nimmt die Kacheln aus der Ebene */
         move_begin();
         if (move_active()) {
             moving = TRUE;
@@ -595,6 +596,7 @@ static void mouse_move(void)
         /* nur merken; angewendet wird einmal pro Durchlauf (apply_move) */
         mv_dx = (LONG)floorf(dx - mv_sx + 0.5f);
         mv_dy = (LONG)floorf(dy - mv_sy + 0.5f);
+        guides_snap_move(&mv_dx, &mv_dy);
         move_pending = TRUE;
     } else if (picking)
         pick_color(mouse_x, mouse_y);
@@ -708,6 +710,7 @@ static void mouse_up(void)
     if (moving) {
         mv_dx = (LONG)floorf(scr2docx(mouse_x) - mv_sx + 0.5f);
         mv_dy = (LONG)floorf(scr2docy(mouse_y) - mv_sy + 0.5f);
+        guides_snap_move(&mv_dx, &mv_dy);
         move_update(mv_dx, mv_dy);
         move_end();
         moving = move_pending = FALSE;

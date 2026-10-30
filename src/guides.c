@@ -8,6 +8,7 @@
  */
 #include <exec/types.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include "apx.h"
 
@@ -322,4 +323,107 @@ void guides_snap_scr(LONG *x, LONG *y)
         *x = doc2scrx(sx);
     if (sy != dy)
         *y = doc2scry(sy);
+}
+
+/* ---- Einrasten beim Verschieben (Move Tool) ---- */
+
+static BOOL mb_ok;
+static LONG mb_x0, mb_y0, mb_x1, mb_y1;     /* Umriss des bewegten Inhalts, x1/y1 exklusiv */
+
+static void mb_add(LONG x0, LONG y0, LONG x1, LONG y1)
+{
+    if (x0 < mb_x0) mb_x0 = x0;
+    if (y0 < mb_y0) mb_y0 = y0;
+    if (x1 > mb_x1) mb_x1 = x1;
+    if (y1 > mb_y1) mb_y1 = y1;
+}
+
+/* sichtbare Pixel einer Ebene (Kacheln und Ueberhang) */
+static void mb_layer(Layer *l)
+{
+    LONG tx, ty, x, y;
+    if (l->kind != LK_PIXEL)
+        return;
+    for (ty = 0; ty < doc->th; ty++)
+        for (tx = 0; tx < doc->tw; tx++) {
+            Tile *t = l->tiles[ty * doc->tw + tx];
+            LONG bx = tx << TILE_SHIFT, by = ty << TILE_SHIFT;
+            LONG x0 = TILE_SIZE, y0 = TILE_SIZE, x1 = -1, y1 = -1;
+            if (!t || t->flag == TF_EMPTY)
+                continue;
+            if (bx >= mb_x0 && by >= mb_y0 && bx + TILE_SIZE <= mb_x1 && by + TILE_SIZE <= mb_y1)
+                continue;           /* liegt schon ganz innen */
+            for (y = 0; y < TILE_SIZE; y++) {
+                const ULONG *p = t->px + (y << TILE_SHIFT);
+                for (x = 0; x < TILE_SIZE; x++)
+                    if (p[x] >> 24) {
+                        if (x < x0) x0 = x;
+                        if (x > x1) x1 = x;
+                        if (y < y0) y0 = y;
+                        y1 = y;
+                    }
+            }
+            if (x1 >= 0)
+                mb_add(bx + x0, by + y0, bx + x1 + 1, by + y1 + 1);
+        }
+    if (l->ovf) {
+        Ovf *o = l->ovf;
+        for (y = 0; y < o->h; y++)
+            for (x = 0; x < o->w; x++)
+                if (o->px[y * o->w + x] >> 24)
+                    mb_add(o->x + x, o->y + y, o->x + x + 1, o->y + y + 1);
+    }
+}
+
+void guides_move_begin(void)
+{
+    LONG pk[MAX_LAYERS], np, q, k;
+    mb_ok = FALSE;
+    if (doc->hassel) {
+        mb_x0 = doc->selx0; mb_y0 = doc->sely0;
+        mb_x1 = doc->selx1; mb_y1 = doc->sely1;
+        mb_ok = mb_x0 < mb_x1 && mb_y0 < mb_y1;
+        return;
+    }
+    mb_x0 = mb_y0 = 0x7FFFFFFF;
+    mb_x1 = mb_y1 = -0x7FFFFFFF;
+    np = doc_picked(pk);
+    if (np > 1 || doc->layers[doc->active]->kind == LK_GROUP) {
+        for (q = 0; q < np; q++)
+            for (k = pk[q] - layer_block(pk[q]) + 1; k <= pk[q]; k++)
+                mb_layer(doc->layers[k]);
+    } else
+        mb_layer(doc->layers[doc->active]);
+    mb_ok = mb_x0 < mb_x1 && mb_y0 < mb_y1;
+}
+
+/* Versatz, der Kante a0/a1 oder Mitte auf ein Ziel legt (0: nichts in Reichweite) */
+static LONG snap_shift(LONG a0, LONG a1, BOOL vert, LONG size)
+{
+    float tol = SNAP_PX / zoom, bd = tol + 0.001f;
+    LONG best = 0, i, k, n = guides_show ? doc->nguides : 0;
+    for (i = -3; i < n; i++) {
+        LONG t, d;
+        if (i >= 0 && (doc->gvert[i] != 0) != vert)
+            continue;
+        t = i == -3 ? 0 : i == -2 ? size : i == -1 ? size / 2 : doc->guide[i];
+        for (k = 0; k < 3; k++) {
+            if (i == -1 && k < 2)
+                continue;       /* Bildmitte nur fuer die Mitte */
+            d = t - (k == 0 ? a0 : k == 1 ? a1 : (a0 + a1) / 2);
+            if ((float)abs(d) < bd) {
+                bd = (float)abs(d);
+                best = d;
+            }
+        }
+    }
+    return best;
+}
+
+void guides_snap_move(LONG *dx, LONG *dy)
+{
+    if (!mb_ok || !guides_snap)
+        return;
+    *dx += snap_shift(mb_x0 + *dx, mb_x1 + *dx, TRUE, doc->w);
+    *dy += snap_shift(mb_y0 + *dy, mb_y1 + *dy, FALSE, doc->h);
 }
