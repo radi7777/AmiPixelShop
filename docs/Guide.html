@@ -436,6 +436,13 @@ exists. The included one uses <b>Flux.1 Fill dev</b>.</td></tr>
 <tr><td><tt>comfy_fill_gguf.json</tt></td><td>The same with a <b>GGUF</b> model such as
 <tt>flux1-fill-dev-Q6_K.gguf</tt> (much smaller). Needs the <i>ComfyUI-GGUF</i> custom node (ComfyUI-Manager) -
 the standard loader does not list .gguf files. Save it as <tt>comfy_fill.json</tt>.</td></tr>
+<tr><td><tt>comfy_fill_flux3.json</tt></td><td><b>FLUX 3 Image Klein</b> (int8, 8 GB GPUs), an editing model:
+it gets the whole picture and an instruction with the region, which its prompt upsampler expands. Model files from
+<tt>huggingface.co/black-forest-labs/flux-3-image-klein-comfy</tt> (accept the license there first; non-commercial).
+Save it as <tt>comfy_fill.json</tt>.</td></tr>
+<tr><td><tt>comfy_fill_flux2klein.json</tt></td><td><b>FLUX.2 Klein 4B</b>: the same kind of editing model, smaller
+and faster (4 steps), without prompt upsampler. Apache 2.0, no login: <tt>huggingface.co/Comfy-Org/Flux-2-Klein-4B</tt>.
+Save it as <tt>comfy_fill.json</tt>, or as <tt>comfy_remove.json</tt> for Remove/Extend only.</td></tr>
 <tr><td><tt>comfy_fill_sd.json</tt></td><td>Example for any SD 1.5 / SDXL inpainting checkpoint (smaller GPUs) - enter your
 model name and save it as <tt>comfy_fill.json</tt>.</td></tr>
 <tr><td><tt>comfy_remove.json</tt></td><td>Optional: Remove and Extend (for example with LaMa).</td></tr>
@@ -445,7 +452,9 @@ node (BiRefNet, RMBG, ...): Load Image &gt; remover &gt; Convert Mask to Image &
 <p>AmiPixelShop looks for them in <tt>ENV:AmiPixelShop/</tt>, <tt>ENVARC:AmiPixelShop/</tt> and the
 <tt>ComfyUI</tt> drawer next to the program. For your own workflow: <i>Workflow &gt; Export (API)</i> in ComfyUI,
 then in a text editor put <tt>"%image%"</tt> as the image of the Load Image node, <tt>%prompt%</tt> into the
-prompt text and optionally <tt>"%seed%"</tt> as the seed (a new one for every request, so <b>Generate again</b>
+prompt text - or <tt>%task%</tt> for editing models such as FLUX 3: a complete instruction that names the region
+(<tt>%box%</tt> gives just the region as <tt>[y_min, x_min, y_max, x_max]</tt>, 0 to 1) - and optionally
+<tt>"%seed%"</tt> as the seed (a new one for every request, so <b>Generate again</b>
 gives new variants). The first request can take a while because the PC loads the models. If a model is
 missing, the error message lists the ones ComfyUI has. See <tt>ComfyUI/ReadMe.txt</tt>.</p>
 <p>For troubleshooting, every AI request writes its steps to <tt>T:AmiPixelShop-AI.log</tt>

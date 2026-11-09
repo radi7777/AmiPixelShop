@@ -218,14 +218,23 @@ static BOOL have_workflow(const char *name)
     return t != NULL;
 }
 
-/* /prompt-Anfrage aus dem Workflow (API-Format) mit den Platzhaltern
- * %prompt%, %image% und %seed%; meldet Fehler selbst */
-static BOOL comfy_body(AiJob *j, const char *name, const char *prompt)
+/* /prompt-Anfrage aus dem Workflow (API-Format) mit den Platzhaltern %image%, %seed%,
+ * %prompt% (Text fuer Inpaint-Modelle), %task% (vollstaendige Anweisung fuer
+ * Edit-Modelle wie FLUX 3, Vorgabe: prompt) und %box% (Bereich als [y_min, x_min,
+ * y_max, x_max] in 0..1, Vorgabe: ganzes Bild); meldet Fehler selbst */
+static BOOL comfy_body(AiJob *j, const char *name, const char *prompt, const char *task, const char *box)
 {
     static ULONG cnt;
-    char *t, *esc, *p, seed[12], msg[300];
+    char *t, *esc, *etask, *p, seed[12], msg[300];
     const char *s;
-    LONG pl = strlen(prompt), n = 0;
+    LONG pl, tl, n = 0;
+
+    if (!task)
+        task = prompt;
+    if (!box)
+        box = "[0.000, 0.000, 1.000, 1.000]";
+    pl = strlen(prompt) * 2 + 8;
+    tl = strlen(task) * 2 + 8;
 
     if (!(t = read_workflow(name))) {
         sprintf(msg, "No ComfyUI workflow %s found.\n\nIn ComfyUI use Workflow > Export (API) and save\n"
@@ -236,20 +245,24 @@ static BOOL comfy_body(AiJob *j, const char *name, const char *prompt)
     if (!strstr(t, "\"class_type\"") || !strstr(t, "%image%")) {
         free(t);
         sprintf(msg, "The ComfyUI workflow %s cannot be used.\n\nExport it with Workflow > Export (API), and put\n"
-                     "%%image%% as the image name of the Load Image node\nand %%prompt%% into the prompt text.", name);
+                     "%%image%% as the image name of the Load Image node\nand %%prompt%% (or %%task%%) into the prompt text.", name);
         request(msg, "OK");
         return FALSE;
     }
-    for (s = t; (s = strstr(s, "%prompt%")); s++)
+    for (s = t; (s = strchr(s, '%')); s++)     /* obere Grenze fuer die Zahl der Platzhalter */
         n++;
-    sprintf(seed, "%lu", (unsigned long)((now_us() ^ (++cnt * 2654435761UL)) & 0x7FFFFFFF));
-    if (!(esc = malloc(pl * 2 + 8)) || !(j->body = net_alloc(strlen(t) + n * (pl * 2 + 8) + 256))) {
+    sprintf(seed, "%lu", (unsigned long)(((now_us() ^ (++cnt * 2654435761UL)) & 0x7FFFFFFF) | 1));   /* nie 0 */
+    etask = NULL;
+    if (!(esc = malloc(pl)) || !(etask = malloc(tl)) ||
+        !(j->body = net_alloc(strlen(t) + n * ((pl > tl ? pl : tl) + strlen(box)) + 256))) {
         free(esc);
+        free(etask);
         free(t);
         status_message("Not enough memory");
         return FALSE;
     }
-    json_esc(prompt, esc, pl * 2 + 8);
+    json_esc(prompt, esc, pl);
+    json_esc(task, etask, tl);
     strcpy(j->body, "{\"client_id\":\"amipixelshop\",\"prompt\":");
     for (p = j->body + strlen(j->body), s = t; *s;) {
         if (!strncmp(s, "\"%seed%\"", 8) || !strncmp(s, "%seed%", 6)) {      /* Zahl, ohne Anfuehrungszeichen */
@@ -258,6 +271,12 @@ static BOOL comfy_body(AiJob *j, const char *name, const char *prompt)
         } else if (!strncmp(s, "%prompt%", 8)) {
             s += 8;
             strcpy(p, esc);
+        } else if (!strncmp(s, "%task%", 6)) {
+            s += 6;
+            strcpy(p, etask);
+        } else if (!strncmp(s, "%box%", 5)) {
+            s += 5;
+            strcpy(p, box);
         } else if (!strncmp(s, "%image%", 7)) {
             s += 7;
             strcpy(p, COMFY_IN);
@@ -270,6 +289,7 @@ static BOOL comfy_body(AiJob *j, const char *name, const char *prompt)
     strcpy(p, "}");
     j->blen = p + 1 - j->body;
     free(esc);
+    free(etask);
     free(t);
     return TRUE;
 }
@@ -1486,10 +1506,20 @@ static void smear_fill(UBYTE *rgb, UBYTE *empty, LONG w, LONG h)
 
 /* ComfyUI: Ausschnitt als PNG, zu fuellender Bereich (Auswahl und Leeres) durchsichtig;
  * der Workflow malt nur dort. Gibt rgb/rgb_empty frei. */
+/* Anteil n/d als "0.123" */
+static char *frac3(char *d, LONG n, LONG den)
+{
+    LONG k = (n * 1000 + den / 2) / den;
+    sprintf(d, "%ld.%03ld", (long)(k / 1000), (long)(k % 1000));
+    return d;
+}
+
 static BOOL comfy_fill(AiJob *j, UBYTE *rgb, UBYTE *rgb_empty, LONG sw, LONG sh, BOOL remove, const char *prompt)
 {
+    static const char where[] = "the region %s (bounding box [y_min, x_min, y_max, x_max], 0 to 1 from the top left)";
     UBYTE *rgba = malloc(sw * sh * 4);
-    LONG x, y, i;
+    LONG x, y, i, bx0 = sw, by0 = sh, bx1 = 0, by1 = 0;
+    char box[80], f[4][16], reg[192], task[760];
     BOOL ok;
 
     if (rgba)
@@ -1500,7 +1530,21 @@ static BOOL comfy_fill(AiJob *j, UBYTE *rgb, UBYTE *rgb_empty, LONG sw, LONG sh,
                 rgba[(y * sw + x) * 4 + 3] = empty || j->sel[oy * j->w + ox] >= 128 ? 0 : 255;
                 if (rgb_empty)
                     rgb_empty[y * sw + x] = empty;
+                if (!rgba[(y * sw + x) * 4 + 3]) {
+                    if (x < bx0) bx0 = x;
+                    if (x >= bx1) bx1 = x + 1;
+                    if (y < by0) by0 = y;
+                    if (y >= by1) by1 = y + 1;
+                }
             }
+    if (bx1 <= bx0 || by1 <= by0) {
+        bx0 = by0 = 0;
+        bx1 = sw;
+        by1 = sh;
+    }
+    sprintf(box, "[%s, %s, %s, %s]", frac3(f[0], by0, sh), frac3(f[1], bx0, sw), frac3(f[2], by1, sh),
+            frac3(f[3], bx1, sw));
+    sprintf(reg, where, box);
     if (rgb_empty)                      /* Leeres mit Randfarben vorfuellen (fuer Workflows mit denoise < 1) */
         smear_fill(rgb, rgb_empty, sw, sh);
     if (rgba)
@@ -1516,6 +1560,20 @@ static BOOL comfy_fill(AiJob *j, UBYTE *rgb, UBYTE *rgb_empty, LONG sw, LONG sh,
     else
         strcpy(j->name, j->grow ? "Gen: Remove" : "Gen: Extend");
     j->mode = !remove ? GEN_FILL : j->grow ? GEN_REMOVE : GEN_EXTEND;
+    /* %task% fuer Edit-Modelle (FLUX 3 usw.): sie sehen das ganze Bild und brauchen den Bereich */
+    if (!remove)
+        sprintf(task, "Edit this photo only inside %s: there, paint %.200s. Blend it naturally into the scene "
+                      "with matching perspective, lighting and colors, and keep everything outside that region "
+                      "exactly unchanged.", reg, prompt);
+    else if (j->grow)
+        sprintf(task, "Remove everything inside %s, including shadows and reflections, and fill the area so it "
+                      "seamlessly continues the surrounding scene. Do not add new objects. Keep everything "
+                      "outside that region exactly unchanged.", reg);
+    else
+        sprintf(task, "The blurry smeared areas in %s are placeholders for missing parts of the photo: repaint "
+                      "them as a sharp, seamless continuation of the scene with the same perspective, lighting, "
+                      "colors and grain. Keep the sharp original content exactly unchanged.", reg);
+    /* %prompt% fuer Inpaint-Modelle (Flux Fill, SD): sie malen nur in der Maske */
     if (!remove)
         ;
     else if (j->grow)
@@ -1523,8 +1581,9 @@ static BOOL comfy_fill(AiJob *j, UBYTE *rgb, UBYTE *rgb_empty, LONG sw, LONG sh,
     else
         prompt = "seamless continuation of the scene";
     j->grow = FALSE;                    /* ComfyUI aendert nur die Maske, nichts nachzuziehen */
+    ai_log("region", box, -1);
     ok = rgba && comfy_body(j, remove && have_workflow("comfy_remove.json") ? "comfy_remove.json" :
-                            "comfy_fill.json", prompt) && comfy_upload(j, rgba, sw, sh, 4);
+                            "comfy_fill.json", prompt, task, box) && comfy_upload(j, rgba, sw, sh, 4);
     if (!rgba)
         status_message("Not enough memory");
     free(rgba);
@@ -2077,7 +2136,7 @@ BOOL ai_segment(LONG kind)
     free(in);
     in = NULL;
     if (j->prov == PROV_COMFY) {        /* Workflow liefert die Maske als Schwarz-Weiss-Bild */
-        BOOL ok = comfy_body(j, "comfy_segment.json", "main subject") && comfy_upload(j, rgb, sw, sh, 3);
+        BOOL ok = comfy_body(j, "comfy_segment.json", "main subject", NULL, NULL) && comfy_upload(j, rgb, sw, sh, 3);
         free(rgb);
         if (!ok) {
             job_free(j);

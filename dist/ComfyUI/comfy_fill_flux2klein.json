@@ -1,0 +1,19 @@
+{
+  "1": {"class_type": "UNETLoader", "_meta": {"title": "FLUX.2 Klein 4B, distilled (models/diffusion_models)"}, "inputs": {"unet_name": "flux-2-klein-4b.safetensors", "weight_dtype": "default"}},
+  "2": {"class_type": "CLIPLoader", "_meta": {"title": "Qwen3-4B text encoder (models/text_encoders)"}, "inputs": {"clip_name": "qwen_3_4b.safetensors", "type": "flux2"}},
+  "3": {"class_type": "VAELoader", "_meta": {"title": "VAE (models/vae)"}, "inputs": {"vae_name": "flux2-vae.safetensors"}},
+  "4": {"class_type": "LoadImage", "_meta": {"title": "Image from AmiPixelShop"}, "inputs": {"image": "%image%"}},
+  "5": {"class_type": "ImageScaleToTotalPixels", "inputs": {"image": ["4", 0], "upscale_method": "lanczos", "megapixels": 1.0, "resolution_steps": 16}},
+  "6": {"class_type": "GetImageSize", "inputs": {"image": ["5", 0]}},
+  "7": {"class_type": "CLIPTextEncode", "_meta": {"title": "Instruction from AmiPixelShop (%task%)"}, "inputs": {"text": "%task%", "clip": ["2", 0]}},
+  "8": {"class_type": "VAEEncode", "inputs": {"pixels": ["5", 0], "vae": ["3", 0]}},
+  "9": {"class_type": "ReferenceLatent", "inputs": {"conditioning": ["7", 0], "latent": ["8", 0]}},
+  "10": {"class_type": "BasicGuider", "inputs": {"model": ["1", 0], "conditioning": ["9", 0]}},
+  "11": {"class_type": "RandomNoise", "inputs": {"noise_seed": "%seed%"}},
+  "12": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+  "13": {"class_type": "Flux2Scheduler", "_meta": {"title": "4 steps (distilled Klein)"}, "inputs": {"steps": 4, "width": ["6", 0], "height": ["6", 1]}},
+  "14": {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": ["6", 0], "height": ["6", 1], "batch_size": 1}},
+  "15": {"class_type": "SamplerCustomAdvanced", "inputs": {"noise": ["11", 0], "guider": ["10", 0], "sampler": ["12", 0], "sigmas": ["13", 0], "latent_image": ["14", 0]}},
+  "16": {"class_type": "VAEDecode", "inputs": {"samples": ["15", 0], "vae": ["3", 0]}},
+  "17": {"class_type": "SaveImage", "inputs": {"images": ["16", 0], "filename_prefix": "AmiPixelShop"}}
+}
