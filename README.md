@@ -33,7 +33,7 @@ as the Amiga allows. Development is done with the help of **Claude** (Anthropic)
 
 | | |
 |---|---|
-| **AI** | Generative Fill with a text prompt, Remove (button or brush), Extend / outpainting, Select Subject, Remove Background - variants and Generate again, via OpenRouter directly from the Amiga (AmiSSL) |
+| **AI** | Generative Fill with a text prompt, Remove (button or brush), Extend / outpainting, Select Subject, Remove Background - variants and Generate again, via OpenRouter or the Google Gemini API directly from the Amiga (AmiSSL), or with ComfyUI on a PC in your LAN |
 | **Layers** | Up to 64 layers, 25 blend modes, opacity & fill, locks, groups (pass through / isolated), multi-selection, drag &amp; drop |
 | **Masks** | Layer and group masks (linked or unlinked), clipping masks |
 | **Adjustments** | Levels with histogram, draggable sliders, Auto and per-channel R/G/B; Curves with histogram; Brightness/Contrast, Hue/Saturation, Threshold, Posterize, ... |
@@ -56,7 +56,7 @@ as the Amiga allows. Development is done with the help of **Claude** (Anthropic)
 - **RTG** (Picasso96 / P96) with a 24 or 32 bit screen mode, 1024&times;600 up to 1920&times;1080.
   Without Picasso96 it falls back to CyberGraphX (`cybergraphics.library`), e.g. on MorphOS - untested there
 - 128 MB Fast RAM or more
-- *For the AI features:* Roadshow, AmiSSL v5 and an OpenRouter API key
+- *For the AI features:* Roadshow, AmiSSL v5 and an OpenRouter or Google Gemini API key - or Roadshow and a PC with ComfyUI in your network
 
 **Tested on:** Amiga 500 + PiStorm (Raspberry Pi 3A+, Emu68), AmigaOS 3.2.3, P96.
 
@@ -77,7 +77,15 @@ Cross-compiled on macOS/Linux with [bebbo's amiga-gcc](https://github.com/bebbo/
 
 ```sh
 make            # produces build/AmiPixelShop
+sh tools/mkpkg.sh   # build/AmiPixelShop.lha (+ the signed update package, where the key is)
 ```
+
+The gcc 16 toolchain (bebbo's `amiga16.2`, with NDK 3.2, Roadshow, P96 and AmiSSL headers) can be
+built on Linux or WSL with `sh tools/build-gcc16.sh /opt/amiga16` (30-60 minutes), then
+`make PATH=/opt/amiga16/bin:$PATH`. GitHub Actions (`.github/workflows/build.yml`) does the same,
+with the toolchain cached, and test-runs the result on an emulated 68040
+(`tools/vamostest.py`). Do not use gcc 6.5 (e.g. the `sacredbanana/amiga-compiler` image): its build
+writes PNG and .aps files with broken checksums.
 
 Notes: compile with `-m68040 -m68881` and link with `-mcpu=68020 -m68881` (see `Makefile`) -
 otherwise the math library goes through the Amiga math libraries and clobbers the FPU registers.

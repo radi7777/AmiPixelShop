@@ -1,5 +1,5 @@
 /*
- * net.c - HTTPS-Client (Roadshow + AmiSSL v5), Base64, Mini-JSON
+ * net.c - HTTP(S)-Client (Roadshow + AmiSSL v5), Base64, Mini-JSON
  */
 #include <stdlib.h>
 #include <string.h>
@@ -62,12 +62,14 @@ static void seterr(NetResp *r, const char *a, const char *b)
         strncat(r->err, b, sizeof(r->err) - 1 - strlen(r->err));
 }
 
-static BOOL ssl_open(NetResp *r)
+static BOOL ssl_open(NetResp *r, BOOL tls)
 {
     if (!(SocketBase = OpenLibrary("bsdsocket.library", 4))) {
         seterr(r, "No TCP/IP stack (bsdsocket.library)", NULL);
         return FALSE;
     }
+    if (!tls)                   /* einfaches HTTP (z. B. ComfyUI im LAN): ohne AmiSSL */
+        return TRUE;
     if (!(AmiSSLMasterBase = OpenLibrary("amisslmaster.library", AMISSLMASTER_MIN_VERSION))) {
         seterr(r, "AmiSSL v5 not installed (amisslmaster.library)", NULL);
         return FALSE;
@@ -184,9 +186,27 @@ static const char *find_hdr(const char *h, const char *end, const char *name)
     return NULL;
 }
 
+/* Senden/Empfangen ueber TLS oder direkt ueber den Socket */
+static LONG io_write(SSL *ssl, LONG s, const void *b, LONG n)
+{
+    return ssl ? SSL_write(ssl, b, n) : send(s, (APTR)b, n, 0);
+}
+
+static LONG io_read(SSL *ssl, LONG s, void *b, LONG n)
+{
+    return ssl ? SSL_read(ssl, b, n) : recv(s, b, n, 0);
+}
+
 BOOL net_https(const char *host, const char *method, const char *path,
                const char *hdrs, const void *body, LONG blen,
                NetResp *r, NetCtl *ctl)
+{
+    return net_http(host, 443, TRUE, method, path, hdrs, body, blen, r, ctl);
+}
+
+BOOL net_http(const char *host, LONG port, BOOL tls, const char *method, const char *path,
+              const char *hdrs, const void *body, LONG blen,
+              NetResp *r, NetCtl *ctl)
 {
     struct hostent *he;
     struct sockaddr_in sa;
@@ -198,26 +218,30 @@ BOOL net_https(const char *host, const char *method, const char *path,
     BOOL ok = FALSE;
 
     memset(r, 0, sizeof(*r));
-    if (!ssl_open(r))
+    if (!ssl_open(r, tls))
         goto out;
 
-    if (!(he = gethostbyname((STRPTR)host))) {
-        seterr(r, "Host not found: ", host);
-        goto out;
+    memset(&sa, 0, sizeof(sa));
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons(port);
+    if ((sa.sin_addr.s_addr = inet_addr((STRPTR)host)) == INADDR_NONE) {    /* keine IP-Adresse */
+        if (!(he = gethostbyname((STRPTR)host))) {
+            seterr(r, "Host not found: ", host);
+            goto out;
+        }
+        memcpy(&sa.sin_addr, he->h_addr, he->h_length);
     }
     if ((s = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         seterr(r, "socket() failed", NULL);
         goto out;
     }
-    memset(&sa, 0, sizeof(sa));
-    sa.sin_family = AF_INET;
-    sa.sin_port = htons(443);
-    memcpy(&sa.sin_addr, he->h_addr, he->h_length);
     if (connect(s, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
         seterr(r, "Cannot connect to ", host);
         goto out;
     }
 
+    if (!tls)
+        goto plain;
     if (!(ctx = SSL_CTX_new(TLS_client_method()))) {
         seterr(r, "SSL_CTX_new failed", NULL);
         goto out;
@@ -241,6 +265,7 @@ BOOL net_https(const char *host, const char *method, const char *path,
         goto out;
     }
 
+plain:
     /* Anfrage */
     if (!(req = net_alloc(512 + strlen(path) + (hdrs ? strlen(hdrs) : 0)))) {
         seterr(r, "Out of memory", NULL);
@@ -261,6 +286,18 @@ BOOL net_https(const char *host, const char *method, const char *path,
         strcat(req, path);
         strcat(req, " HTTP/1.1\r\nHost: ");
         strcat(req, host);
+        if (port != (tls ? 443 : 80)) {
+            char pn[8];
+            LONG k = 7;
+            ULONG pv = port;
+            pn[k] = 0;
+            do {
+                pn[--k] = '0' + pv % 10;
+                pv /= 10;
+            } while (pv && k > 1);
+            pn[--k] = ':';
+            strcat(req, pn + k);
+        }
         strcat(req, "\r\nUser-Agent: AmiPixelShop/" APS_VER_STR " (AmigaOS)\r\n"
                     "Accept-Encoding: identity\r\nConnection: close\r\n");
         if (hdrs)
@@ -269,7 +306,7 @@ BOOL net_https(const char *host, const char *method, const char *path,
         strcat(req, num + i);
         strcat(req, "\r\n\r\n");
     }
-    if (SSL_write(ssl, req, strlen(req)) <= 0) {
+    if (io_write(ssl, s, req, strlen(req)) <= 0) {
         seterr(r, "Send failed", NULL);
         goto out;
     }
@@ -279,7 +316,7 @@ BOOL net_https(const char *host, const char *method, const char *path,
             seterr(r, "Cancelled", NULL);
             goto out;
         }
-        if ((w = SSL_write(ssl, (const UBYTE *)body + n, k)) <= 0) {
+        if ((w = io_write(ssl, s, (const UBYTE *)body + n, k)) <= 0) {
             seterr(r, "Send failed", NULL);
             goto out;
         }
@@ -305,11 +342,11 @@ BOOL net_https(const char *host, const char *method, const char *path,
             buf = nb;
             cap *= 2;
         }
-        if (!SSL_pending(ssl) && !wait_sock(s, FALSE, ctl, &idle)) {
+        if (!(ssl && SSL_pending(ssl)) && !wait_sock(s, FALSE, ctl, &idle)) {
             seterr(r, (ctl && ctl->cancel) ? "Cancelled" : "Timeout", NULL);
             goto out;
         }
-        k = SSL_read(ssl, buf + n, cap - n);
+        k = io_read(ssl, s, buf + n, cap - n);
         if (k <= 0)
             break;
         n += k;

@@ -27,7 +27,8 @@ Features
 --------
 - AI: Generative Fill with a text prompt, Remove (button or brush),
   Extend (outpainting), Select Subject, Remove Background - directly
-  from the Amiga via OpenRouter (needs AmiSSL v5 and an API key)
+  from the Amiga via OpenRouter or Google Gemini (needs AmiSSL v5 and an
+  API key), or with ComfyUI on a PC in your network
 - Layers (up to 64), 25 blend modes, opacity/fill, locks, groups
 - Layer masks, group masks, clipping masks, adjustment layers
 - Layer styles: drop shadow, outer glow, stroke

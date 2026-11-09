@@ -1,0 +1,23 @@
+{
+  "1": { "class_type": "UNETLoader", "_meta": { "title": "Flux.1 Fill (models/diffusion_models)" },
+         "inputs": { "unet_name": "flux1-fill-dev.safetensors", "weight_dtype": "default" } },
+  "2": { "class_type": "DualCLIPLoader", "_meta": { "title": "Text encoders (models/text_encoders)" },
+         "inputs": { "clip_name1": "clip_l.safetensors", "clip_name2": "t5xxl_fp16.safetensors", "type": "flux" } },
+  "3": { "class_type": "VAELoader", "_meta": { "title": "VAE (models/vae)" },
+         "inputs": { "vae_name": "ae.safetensors" } },
+  "4": { "class_type": "CLIPTextEncode", "inputs": { "text": "%prompt%", "clip": ["2", 0] } },
+  "5": { "class_type": "FluxGuidance", "inputs": { "guidance": 30.0, "conditioning": ["4", 0] } },
+  "6": { "class_type": "CLIPTextEncode", "inputs": { "text": "", "clip": ["2", 0] } },
+  "7": { "class_type": "LoadImage", "_meta": { "title": "Image from AmiPixelShop (transparent = fill)" },
+         "inputs": { "image": "%image%" } },
+  "8": { "class_type": "InpaintModelConditioning",
+         "inputs": { "positive": ["5", 0], "negative": ["6", 0], "vae": ["3", 0],
+                     "pixels": ["7", 0], "mask": ["7", 1], "noise_mask": true } },
+  "9": { "class_type": "DifferentialDiffusion", "inputs": { "model": ["1", 0] } },
+  "10": { "class_type": "KSampler",
+          "inputs": { "model": ["9", 0], "seed": "%seed%", "steps": 20, "cfg": 1.0,
+                      "sampler_name": "euler", "scheduler": "normal",
+                      "positive": ["8", 0], "negative": ["8", 1], "latent_image": ["8", 2], "denoise": 1.0 } },
+  "11": { "class_type": "VAEDecode", "inputs": { "samples": ["10", 0], "vae": ["3", 0] } },
+  "12": { "class_type": "SaveImage", "inputs": { "images": ["11", 0], "filename_prefix": "AmiPixelShop" } }
+}
