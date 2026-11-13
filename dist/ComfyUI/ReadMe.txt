@@ -48,6 +48,28 @@ ENVARC:AmiPixelShop/ and then in this drawer)
                        qwen_3_4b (text_encoders), flux2-vae (vae). Save it
                        as comfy_fill.json - or as comfy_remove.json, to use
                        it for Remove/Extend next to another Fill workflow.
+  comfy_fill_minimax.json  MiniMax H3 Image (33B editing model, 6 steps):
+                       official ComfyUI files from huggingface.co/Comfy-Org/
+                       MiniMax-H3-Image - minimax_h3_image_pruned_int8_convrot
+                       (diffusion_models), qwen3vl_32b_minimax_h3_int8_convrot
+                       and qwen3.5_9b_w4a8_gptq (text_encoders),
+                       minimax_h3_image_vae_fp16 (vae). Needs ComfyUI 0.45 or
+                       newer and a big GPU. Its prompt enhancer (Qwen3.5-9B,
+                       node 8) is on; change "value": true to false there to
+                       skip it (faster, less VRAM). The picture is sent at
+                       1 megapixel (node 5; the official workflow uses 4).
+                       License: MiniMax H3 Image Community License (separate
+                       permission needed above 1 million USD revenue).
+  comfy_fill_minimax_gguf.json  The same with GGUF files (needs the
+                       ComfyUI-GGUF custom node): MiniMax-H3-Image-Pruned-
+                       Q4_K_M.gguf (Q2_K 6.9 GB for 8-10 GB VRAM ... Q5_K_M
+                       14 GB; huggingface.co/Abiray/MiniMax-H3-Image-GGUF) and
+                       the text encoder qwen3vl_32b_minimax_h3-Q4_K_M.gguf
+                       (huggingface.co/Abiray/MiniMax-H3-GGUF), plus the VAE
+                       and enhancer above. Enhancer off by default.
+                       Two files instead of one switch: ComfyUI checks the
+                       model files of every loader in a workflow, also of an
+                       unused one, so a switch would need both sets installed.
   comfy_fill_sd.json   Alternative for smaller GPUs: any SD 1.5 / SDXL
                        inpainting checkpoint. Put your model name into
                        ckpt_name and save it as comfy_fill.json.
